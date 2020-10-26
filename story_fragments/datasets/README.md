@@ -5,5 +5,6 @@ Location for code to process and provide datasets for the project. The project u
 
 Primarily there are two main kinds of datasets in the projects:
 
-1. **Passage**: Normal datasets to read story related datasets for training and inference.
-2. **DPR (Dense Passage Retrieval)
+- **Passage**: Normal datasets to read story related datasets for training and inference.
+- **DPR (Dense Passage Retrieval)**: Working and long-term memory datasets 
+based on [DPR](https://github.com/facebookresearch/DPR).
