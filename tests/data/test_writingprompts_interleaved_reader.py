@@ -1,7 +1,7 @@
 from allennlp.common.testing import AllenNlpTestCase
 from allennlp.common.util import ensure_list, logger
 
-from story_fragments.datasets.writingprompts_interleaved_reader import WritingPromptsInterleavedReader
+from story_fragments.data.writingprompts_interleaved_reader import WritingPromptsInterleavedReader
 
 
 class TestWritingPromptsInterleavedReader(AllenNlpTestCase):

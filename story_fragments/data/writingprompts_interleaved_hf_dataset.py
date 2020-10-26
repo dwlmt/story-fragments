@@ -5,7 +5,7 @@ import datasets
 from datasets.info import SupervisedKeysData
 from jsonlines import jsonlines
 
-from story_fragments.datasets.hf_interleaving_utils import interleave_examples
+from story_fragments.data.hf_interleaving_utils import interleave_examples
 
 _VERSION = datasets.Version("1.0.0")
 
