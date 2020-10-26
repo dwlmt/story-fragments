@@ -8,20 +8,29 @@ from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from datasets import load_dataset
 
 
-@DatasetReader.register('writingprompts-interleaved')
-class WritingPromptsInterleavedReader(DatasetReader):
-    ''' Interleaved version of WritingPrompts.
+@DatasetReader.register('wikiplots-interleaved')
+class WikiplotsInterleavedReader(DatasetReader):
+    ''' Interleaved version of Wikiplots
+
+    Wikiplots has a single soure file and so is dynamically split.
 
     '''
 
     def __init__(self,
                  tokenizer: Tokenizer = None,
                  token_indexers: Dict[str, TokenIndexer] = None,
+                 train_split: int = 80,
+                 valid_split: int = 10,
+                 test_split: int = 10,
                  **kwargs):
         super().__init__(**kwargs)
         self.tokenizer = tokenizer or PretrainedTransformerTokenizer(model_name="facebook/bart-base")
         self.token_indexers = token_indexers or {
             "tokens": PretrainedTransformerIndexer(model_name="facebook/bart-base")}
+
+        self.train_split = train_split
+        self.valid_split = valid_split
+        self.test_split = test_split
 
     def text_to_instance(self, example: Dict) -> Instance:
         fields = {}
@@ -49,8 +58,15 @@ class WritingPromptsInterleavedReader(DatasetReader):
         '''
         config, split = file_path.split('/')
 
-        dataset = load_dataset(f"{os.path.dirname(__file__)}/writingprompts_interleaved_hf_dataset.py", name=config,
-                               split=split)
+        if split == "train":
+            dataset = load_dataset(f"{os.path.dirname(__file__)}/wikiplots_interleaved_hf_dataset.py", name=config,
+                                   split=f'train[:{self.train_split}%]')
+        elif split == "validation":
+            dataset = load_dataset(f"{os.path.dirname(__file__)}/wikiplots_interleaved_hf_dataset.py", name=config,
+                                   split=f'train[{self.train_split}%:{self.train_split + self.valid_split}%]')
+        else:
+            dataset = load_dataset(f"{os.path.dirname(__file__)}/wikiplots_interleaved_hf_dataset.py", name=config,
+                                   split=f'train[-{self.test_split}%:]')
 
         for example in dataset:
             yield self.text_to_instance(example)

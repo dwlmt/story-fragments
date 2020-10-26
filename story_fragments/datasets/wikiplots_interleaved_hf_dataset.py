@@ -33,6 +33,7 @@ class WikiPlotsInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  label_size: int = 1,
                  step_size: int = 1,
                  batch_size: int = 100,
+                 dummy: bool = False,
                  **kwargs):
         """ Generic config for reading a dataset in a interleaved or round robin fashion.
 
@@ -53,6 +54,7 @@ class WikiPlotsInterleavedHfDatasetConfig(datasets.BuilderConfig):
         self.label_size = label_size
         self.step_size = step_size
         self.batch_size = batch_size
+        self.dummy = dummy
 
         super(WikiPlotsInterleavedHfDatasetConfig, self).__init__(**kwargs)
 
@@ -64,6 +66,13 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
 
     BUILDER_CONFIG_CLASS = WikiPlotsInterleavedHfDatasetConfig
     BUILDER_CONFIGS = [
+        WikiPlotsInterleavedHfDatasetConfig(name="wikiplots_dummy",
+                                            description="Wikiplots dummy smaller dataset.",
+                                            data_url=_URL,
+                                            data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                            data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                            version=_VERSION,
+                                            dummy=False),
         WikiPlotsInterleavedHfDatasetConfig(name="wikiplots_context_1_label_1_step_1",
                                             description="Wikiplots with one sentence of context, "
                                                         "labels and a one sentence step.",
@@ -132,5 +141,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
         with jsonlines.open(filepath, mode='r') as reader:
             for example in interleave_examples(reader, self.config.batch_size, self.config.context_size,
                                                self.config.label_size,
-                                               self.config.step_size):
+                                               self.config.step_size,
+                                               dummy=self.config.dummy):
                 yield example['id'], example
