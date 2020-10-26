@@ -5,7 +5,7 @@ from blingfire import text_to_sentences
 
 
 def interleave_examples(reader, batch_size: int = 1, context_size: int = 1,
-                        label_size: int = 1, step_size: int = 1):
+                        label_size: int = 1, step_size: int = 1, dummy: bool = False, dummy_max_examples: int = 10000):
     """ Interleaves epsiodes examples, processes and returns as as dict.
 
     Args:
@@ -51,6 +51,8 @@ def interleave_examples(reader, batch_size: int = 1, context_size: int = 1,
         episodes_example_list.append(example_list)
 
     batch_list = []
+
+    example_counter = 0
     # Keep going while episodes left.
     while len(batch_list) > 0 or len(episodes_example_list) > 0:
 
@@ -63,6 +65,10 @@ def interleave_examples(reader, batch_size: int = 1, context_size: int = 1,
             example = episode.popleft()
             # print(example)
             yield example
+            example_counter += 1
+
+            if dummy and example_counter >= dummy_max_examples:
+                return
 
         # Remove empty episodes from the batch.
         batch_list = deque([e for e in batch_list if len(e) > 0])
