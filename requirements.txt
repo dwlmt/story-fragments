@@ -1,0 +1,5 @@
+datasets==1.1.2
+allennlp==1.2.0rc1.dev20201022
+more_itertools==8.5.0
+jsonlines==1.2.0
+blingfire==0.1.3
