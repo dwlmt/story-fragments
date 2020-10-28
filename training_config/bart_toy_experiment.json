@@ -16,14 +16,19 @@
   "validation_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy/validation\"}",
   "model": {
     "type": "bart-fragments",
-    "transformer_model_name": "facebook/bart-base"
+    "transformer_model_name": "facebook/bart-large"
   },
   "data_loader": {
     "batch_size": 8,
-    "batches_per_epoch": 100
+    "batches_per_epoch": 1000
   },
   "trainer": {
-    "optimizer": "adam",
-    "num_epochs": 5
+    "optimizer": {
+      "type": "sgd",
+      "lr": 0.01,
+      "momentum": 0.9,
+      "nesterov": true
+    },
+    "num_epochs": 10
   }
 }
