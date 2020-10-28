@@ -35,7 +35,7 @@ declare -a ScratchPathArray=(/disk/scratch_big/ /disk/scratch1/ /disk/scratch2/ 
 # Iterate the string array using for loop
 for i in "${ScratchPathArray[@]}"; do
   echo ${i}
-  if [ -d ${i} ]; then
+  if [ -d ${i} ] &&  [ -w ${i} ]; then
     export SCRATCH_HOME="${i}/${STUDENT_ID}"
     mkdir -p ${SCRATCH_HOME}
     break
