@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Iterable
 
-from allennlp.data import DatasetReader, Tokenizer, TokenIndexer, Instance
+from allennlp.data import DatasetReader, Instance
 from allennlp.data.fields import TextField, MetadataField
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
@@ -17,19 +17,35 @@ class WikiplotsInterleavedReader(DatasetReader):
     '''
 
     def __init__(self,
-                 tokenizer: Tokenizer = None,
-                 token_indexers: Dict[str, TokenIndexer] = None,
+                 transformer_model_name="facebook/bart-base",
+                 max_length: int = 128,
+                 add_special_tokens: bool = True,
                  train_split: int = 80,
-                 valid_split: int = 10,
+                 validation_split: int = 10,
                  test_split: int = 10,
                  **kwargs):
+        """
+
+        Args:
+              transformer_model_name (str): Name of the transformers library tokenizer.
+            max_length (int): Max length
+            add_special_tokens (bool): Whether to add the special BERT tokens.
+            train_split (int): % training set split.
+            validation_split (int): % validation split.
+            test_split (int): % test split.
+            **kwargs:
+        """
         super().__init__(**kwargs)
-        self.tokenizer = tokenizer or PretrainedTransformerTokenizer(model_name="facebook/bart-base")
-        self.token_indexers = token_indexers or {
-            "tokens": PretrainedTransformerIndexer(model_name="facebook/bart-base")}
+        self.tokenizer = PretrainedTransformerTokenizer(model_name=transformer_model_name, max_length=max_length,
+                                                        add_special_tokens=add_special_tokens,
+                                                        tokenizer_kwargs={"truncation": True})
+        self.token_indexers = {
+            "tokens": PretrainedTransformerIndexer(model_name=transformer_model_name, max_length=max_length)}
+
+        assert (train_split + validation_split + test_split) == 100
 
         self.train_split = train_split
-        self.valid_split = valid_split
+        self.validation_split = validation_split
         self.test_split = test_split
 
     def text_to_instance(self, example: Dict) -> Instance:
@@ -41,9 +57,12 @@ class WikiplotsInterleavedReader(DatasetReader):
 
         text_field = TextField(tokens, self.token_indexers)
         fields['text'] = text_field
+
         if "label" in example:
-            label_tokens = self.tokenizer.tokenize(example['label'])
-            fields['label'] = TextField(label_tokens, self.token_indexers)
+            target_tokens = self.tokenizer.tokenize(example['label'])
+            # This will need to be manipulated.
+
+            fields['labels'] = TextField(target_tokens, self.token_indexers)
 
         return Instance(fields)
 
@@ -63,7 +82,7 @@ class WikiplotsInterleavedReader(DatasetReader):
                                    split=f'train[:{self.train_split}%]')
         elif split == "validation":
             dataset = load_dataset(f"{os.path.dirname(__file__)}/wikiplots_interleaved_hf_dataset.py", name=config,
-                                   split=f'train[{self.train_split}%:{self.train_split + self.valid_split}%]')
+                                   split=f'train[{self.train_split}%:{self.train_split + self.validation_split}%]')
         else:
             dataset = load_dataset(f"{os.path.dirname(__file__)}/wikiplots_interleaved_hf_dataset.py", name=config,
                                    split=f'train[-{self.test_split}%:]')

@@ -1,7 +1,7 @@
 import os
 from typing import Dict, Iterable
 
-from allennlp.data import DatasetReader, Tokenizer, TokenIndexer, Instance
+from allennlp.data import DatasetReader, Instance
 from allennlp.data.fields import TextField, MetadataField
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
@@ -15,13 +15,23 @@ class WritingPromptsInterleavedReader(DatasetReader):
     '''
 
     def __init__(self,
-                 tokenizer: Tokenizer = None,
-                 token_indexers: Dict[str, TokenIndexer] = None,
+                 transformer_model_name="facebook/bart-base",
+                 max_length: int = 128,
+                 add_special_tokens: bool = True,
                  **kwargs):
+        """
+        Args:
+            transformer_model_name (str): Name of the transformers library tokenizer.
+            max_length (int): Max length
+            add_special_tokens (bool): Whether to add the special BERT tokens.
+            **kwargs: Additional args.
+        """
         super().__init__(**kwargs)
-        self.tokenizer = tokenizer or PretrainedTransformerTokenizer(model_name="facebook/bart-base")
-        self.token_indexers = token_indexers or {
-            "tokens": PretrainedTransformerIndexer(model_name="facebook/bart-base")}
+        self.tokenizer = PretrainedTransformerTokenizer(model_name=transformer_model_name, max_length=max_length,
+                                                        add_special_tokens=add_special_tokens,
+                                                        tokenizer_kwargs={"truncation": True})
+        self.token_indexers = {
+            "tokens": PretrainedTransformerIndexer(model_name=transformer_model_name, max_length=max_length)}
 
     def text_to_instance(self, example: Dict) -> Instance:
         fields = {}
@@ -32,9 +42,11 @@ class WritingPromptsInterleavedReader(DatasetReader):
 
         text_field = TextField(tokens, self.token_indexers)
         fields['text'] = text_field
+
         if "label" in example:
             label_tokens = self.tokenizer.tokenize(example['label'])
-            fields['label'] = TextField(label_tokens, self.token_indexers)
+
+            fields['labels'] = TextField(label_tokens, self.token_indexers)
 
         return Instance(fields)
 

@@ -43,8 +43,8 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  data_url: str,
                  data_download_num_bytes: Optional[int],
                  data_download_checksum: Optional[str],
-                 context_size: int = 1,
-                 label_size: int = 1,
+                 input_size: int = 1,
+                 target_size: int = 1,
                  step_size: int = 1,
                  batch_size: int = 100,
                  dummy: bool = False,
@@ -55,9 +55,9 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
             data_url (str): The url for the compressed jsonl file.
             data_download_num_bytes (int): Number of bytes of the datafile.
             data_download_checksum (str): SHA-256 checksum for the data file.
-            context_size (int): Size in sentences of the context text to condition on.
-            label_size (int): Size in sentences of the text label to predict.
-            step_size (int): Sliding window step to pass over the text.
+            input_size (int): Size in sentences of the context input_text to condition on.
+            target_size (int): Size in sentences of the input_text target_text to predict.
+            step_size (int): Sliding window step to pass over the input_text.
             batch_size (int): Number of stories to iterate over in parallel.
             dummy (bool): If true then only yield the first 10000 examples.
             **kwargs: Pass to parent.
@@ -65,8 +65,8 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
         self.data_url = data_url
         self.data_download_num_bytes = data_download_num_bytes
         self.data_download_checksum = data_download_checksum
-        self.context_size = context_size
-        self.label_size = label_size
+        self.input_size = input_size
+        self.target_size = target_size
         self.step_size = step_size
         self.batch_size = batch_size
         self.dummy = dummy
@@ -86,6 +86,7 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_url=_URL,
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 dummy=True,
                                                  version=_VERSION),
         WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_1_label_1_step_1",
                                                  description="Writing Prompts with one sentence of context, "
@@ -96,8 +97,8 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  version=_VERSION),
         WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_3_label_3_step_3",
                                                  description="Writing Prompts with 3 sentence steps.",
-                                                 context_size=3,
-                                                 label_size=3,
+                                                 input_size=3,
+                                                 target_size=3,
                                                  step_size=3,
                                                  data_url=_URL,
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
@@ -127,8 +128,8 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                     "episode_id": datasets.Value("string"),  # The original id.
                     "episode_seq_num": datasets.Value("int32"),  # Unique sequence number for the episode.
                     "title": datasets.Value("string"),  # The title of the work, or for WP the prompt.
-                    "text": datasets.Value("string"),  # The context text field.
-                    "label": datasets.Value("string"),  # The text to predict.
+                    "text": datasets.Value("string"),  # The context input_text field.
+                    "label": datasets.Value("string"),  # The input_text to predict.
                     "episode_done": datasets.Value("bool"),  # True for the last passage in an episode.
                     "episode_begun": datasets.Value("bool")  # True for the first passage in an episode.
 
@@ -172,12 +173,12 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
 
     def _generate_examples(self, filepath, split):
         """ Yields an example for each story split by stories.
-            The prompt is the title but also prepended to the main text.
+            The prompt is the title but also prepended to the main input_text.
         """
 
         with jsonlines.open(filepath, mode='r') as reader:
-            for example in interleave_examples(reader, self.config.batch_size, self.config.context_size,
-                                               self.config.label_size,
+            for example in interleave_examples(reader, self.config.batch_size, self.config.input_size,
+                                               self.config.target_size,
                                                self.config.step_size,
                                                dummy=self.config.dummy):
                 yield example['id'], example
