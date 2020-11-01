@@ -17,8 +17,10 @@ class WikiplotsInterleavedReader(DatasetReader):
     '''
 
     def __init__(self,
-                 transformer_model_name="facebook/bart-base",
-                 max_length: int = 128,
+                 generator_model_name="facebook/bart-base",
+                 generator_max_length: int = 128,
+                 encoder_model_name="facebook/dpr-question_encoder-single-nq-base",
+                 encoder_max_length: int = 128,
                  add_special_tokens: bool = True,
                  train_split: int = 80,
                  validation_split: int = 10,
@@ -27,8 +29,10 @@ class WikiplotsInterleavedReader(DatasetReader):
         """
 
         Args:
-              transformer_model_name (str): Name of the transformers library tokenizer.
-            max_length (int): Max length
+            generator_model_name (str): Name of the model used for the generator tokenizer.
+            generator_max_length (int): Max length.
+            encoder_model_name (str): Name of the model used for the encoder (question) tokenizer.
+            encoder_max_length (int): Max length.
             add_special_tokens (bool): Whether to add the special BERT tokens.
             train_split (int): % training set split.
             validation_split (int): % validation split.
@@ -36,11 +40,20 @@ class WikiplotsInterleavedReader(DatasetReader):
             **kwargs:
         """
         super().__init__(**kwargs)
-        self.tokenizer = PretrainedTransformerTokenizer(model_name=transformer_model_name, max_length=max_length,
-                                                        add_special_tokens=add_special_tokens,
-                                                        tokenizer_kwargs={"truncation": True})
-        self.token_indexers = {
-            "tokens": PretrainedTransformerIndexer(model_name=transformer_model_name, max_length=max_length)}
+        self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
+                                                                  max_length=generator_max_length,
+                                                                  add_special_tokens=add_special_tokens,
+                                                                  tokenizer_kwargs={"truncation": True})
+        self.generator_indexers = {
+            "tokens": PretrainedTransformerIndexer(model_name=generator_model_name, max_length=generator_max_length)}
+
+        self.encoder_tokenizer = PretrainedTransformerTokenizer(model_name=encoder_model_name,
+                                                                max_length=encoder_max_length,
+                                                                add_special_tokens=add_special_tokens,
+                                                                tokenizer_kwargs={"truncation": True})
+
+        self.encoder_indexers = {
+            "tokens": PretrainedTransformerIndexer(model_name=encoder_model_name, max_length=encoder_max_length)}
 
         assert (train_split + validation_split + test_split) == 100
 
@@ -53,16 +66,15 @@ class WikiplotsInterleavedReader(DatasetReader):
 
         fields["metadata"] = MetadataField(example)
 
-        tokens = self.tokenizer.tokenize(example['text'])
+        tokens = self.encoder_tokenizer.tokenize(example['text'])
 
-        text_field = TextField(tokens, self.token_indexers)
+        text_field = TextField(tokens, self.encoder_indexers)
         fields['text'] = text_field
 
         if "label" in example:
-            target_tokens = self.tokenizer.tokenize(example['label'])
-            # This will need to be manipulated.
+            target_tokens = self.generator_tokenizer.tokenize(example['label'])
 
-            fields['labels'] = TextField(target_tokens, self.token_indexers)
+            fields['labels'] = TextField(target_tokens, self.generator_indexers)
 
         return Instance(fields)
 
