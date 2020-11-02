@@ -53,7 +53,7 @@ class RagFragmentsModel(Model):
         self.metrics = {}
 
         for acc in self.lm_accuracy_top_k:
-            self.metrics[f'lm_accuracy_{acc}'] = CategoricalAccuracy()
+            self.metrics[f'lm_accuracy_{acc}'] = CategoricalAccuracy(top_k=acc)
         self.metrics['lm_perplexity'] = Perplexity()
 
     # Note that the signature of forward() needs to match that of field names
@@ -91,7 +91,9 @@ class RagFragmentsModel(Model):
 
             results["loss"] = torch.mean(model_output.loss)
 
-            self._update_metrics(model_output, label_tokens)
+            label_mask = labels["tokens"]['mask']
+
+            self._update_metrics(model_output, label_tokens, label_mask)
             self._add_retrieval_info(model_output, results)
 
         self._generate_if_required(input_ids, input_mask, num_sequences_to_generate, results)
@@ -119,20 +121,22 @@ class RagFragmentsModel(Model):
                                                                        skip_special_tokens=True)
         return output_dict
 
-    def _update_metrics(self, model_output, label_tokens):
+    def _update_metrics(self, model_output, label_tokens, label_mask):
         if not self.training:
             with torch.no_grad():
+
                 self.metrics['lm_perplexity'](torch.mean(model_output.loss))
 
                 print("Logits", model_output.logits.size(), label_tokens.size())
 
-                '''
-                
-             
+                num_docs = self.rag_ndocs
+                labels_batch_size = label_tokens.size()[0]
+                indices = range(0, labels_batch_size * num_docs , num_docs)
+
+                logits_indexed = model_output.logits[indices]
                 for acc in self.lm_accuracy_top_k:
-                    print(logits.size(), label_tokens.size())
-                    self.metrics[f'lm_accuracy_{acc}'](logits, label_tokens)
-                '''
+                    print(logits_indexed.size(), label_tokens.size())
+                    self.metrics[f'lm_accuracy_{acc}'](logits_indexed, label_tokens, mask=label_mask)
 
     def _add_retrieval_info(self, model_outputs, results):
         # Only update metrics when not training to improve performance
