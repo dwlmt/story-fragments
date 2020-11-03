@@ -3,15 +3,13 @@ import os
 from functools import partial
 from typing import List, OrderedDict
 
+import faiss
 import fire
 import more_itertools
-import numpy
 import torch
 from datasets import load_dataset
 from jsonlines import jsonlines
-from tqdm import tqdm
-import faiss
-from transformers import DPRContextEncoder, DPRContextEncoderTokenizer, DPRContextEncoderTokenizerFast
+from transformers import DPRContextEncoder, DPRContextEncoderTokenizerFast
 
 try:
     from blingfire import text_to_sentences
@@ -30,6 +28,7 @@ def embed(examples: dict, ctx_encoder: DPRContextEncoder, ctx_tokenizer: DPRCont
     embeddings = ctx_encoder(input_ids, return_dict=True).pooler_output
     return {"embeddings": embeddings.detach().cpu().numpy()}
 
+
 class ProcessDPRDataset(object):
 
     def create(self, datasets: List[str], base_output_dir, dataset_name,
@@ -40,20 +39,21 @@ class ProcessDPRDataset(object):
                embedding_dim: int = 768,
                train_size: int = 250000,
                index_worlds: int = 32,
-               index_ncentroids=4096,
-               index_code_size=64,
-               rag_context_encoder="facebook/dpr-ctx_encoder-multiset-base",
-               rag_tokenizer="facebook/dpr-ctx_encoder-single-nq-base"):
+               index_ncentroids: int = 4096,
+               index_code_size: int = 64,
+               rag_context_encoder: str = "facebook/dpr-ctx_encoder-multiset-base",
+               rag_tokenizer: str = "facebook/dpr-ctx_encoder-single-nq-base",
+               skip_splitting: bool = False):
 
         from pathlib import Path
         Path(base_output_dir).mkdir(parents=True, exist_ok=True)
 
-        self.split_passages_and_write_text(base_output_dir, dataset_name, datasets, window_size, window_step)
+        if not skip_splitting:
+            self.split_passages_and_write_text(base_output_dir, dataset_name, datasets, window_size, window_step)
 
         # Reload the text dataset and process as a DPR dataset.
         dataset = load_dataset(
-            "csv", data_files=[f'{base_output_dir}/{dataset_name}.csv'], split="train", delimiter=",", column_names=['id','title','text']
-        )
+            "json", data_files=[f'{base_output_dir}/{dataset_name}.jsonl'], split="train")
 
         ctx_encoder = DPRContextEncoder.from_pretrained(rag_context_encoder)
         ctx_tokenizer = DPRContextEncoderTokenizerFast.from_pretrained(rag_tokenizer)
@@ -120,16 +120,9 @@ class ProcessDPRDataset(object):
 
                         id += 1
 
-        with jsonlines.open(f'{base_output_dir}/text.jsonl', mode='w') as writer:
+        with jsonlines.open(f'{base_output_dir}/{dataset_name}.jsonl', mode='w') as writer:
             for output in output_list:
                 writer.write(output)
-        with open(f'{base_output_dir}/{dataset_name}.csv', 'w', newline='') as csvfile:
-            fieldnames = ['id', 'title', 'text']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-
-            for output in output_list:
-                writer.writerow(output)
 
 
 if __name__ == '__main__':
