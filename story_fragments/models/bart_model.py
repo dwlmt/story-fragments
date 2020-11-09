@@ -1,3 +1,4 @@
+import logging
 from typing import Dict, Any, List
 
 import torch
@@ -8,6 +9,8 @@ from allennlp.training.metrics import Metric, SequenceAccuracy, Perplexity, Cate
 from transformers import AutoModel, BartForConditionalGeneration, AutoTokenizer
 
 PAD_TOKEN = 1
+
+logger = logging.getLogger(__name__)
 
 
 @Model.register('bart-fragments')
@@ -46,10 +49,10 @@ class BartFragmentsModel(Model):
             label_tokens = labels["tokens"]['token_ids']
 
             trans_output = self.transformer(input_ids=input_ids,
-                                            attention_mask=input_mask,
+                                            #attention_mask=input_mask,
                                             labels=label_tokens)
 
-            results["loss"] = trans_output.loss
+            results["loss"] = trans_output[0]
 
             self._update_metrics(trans_output, label_tokens)
 
@@ -83,7 +86,7 @@ class BartFragmentsModel(Model):
 
                 logits = model_output[0]
 
-                mask = (label_tokens != PAD_TOKEN).bool()
+                mask = (label_tokens != PAD_TOKEN)
 
                 for acc in self.lm_accuracy_top_k:
                     self.metrics[f'lm_accuracy_{acc}'](logits, label_tokens, mask=mask)
