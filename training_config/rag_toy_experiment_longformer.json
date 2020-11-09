@@ -5,15 +5,15 @@
       "writingprompts-interleaved": {
         "type": "writingprompts-interleaved",
         "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 128,
+        "generator_max_length": 512,
+        "encoder_max_length": 512,
         "lazy": true
       },
       "wikiplots-interleaved": {
         "type": "wikiplots-interleaved",
         "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 128,
+        "generator_max_length": 512,
+        "encoder_max_length": 512,
         "lazy": true
       }
     }
@@ -21,20 +21,22 @@
   "train_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy/train\", \"writingprompts-interleaved\": \"writingprompts_dummy/train\"}",
   "validation_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy/validation\"}",
   "data_loader": {
-    "batch_size": 3,
+    "batch_size": 6,
     "batches_per_epoch": 10000
   },
   "validation_data_loader": {
-    "batch_size": 3,
+    "batch_size": 6,
     "batches_per_epoch": 1000
   },
   "model": {
     "type": "rag-fragments",
-    "rotate_grad_training": true,
-    "generator_name": "facebook/bart-base",
+    "rotate_grad_training": false,
+    "long_attention_mode": "sliding_chunks",
+    "rag_max_combined_length": 512,
+    "generator_name": "/home/s1569885/longformer_models/bart_large_short",
     "rag_index_name": "custom",
-    "rag_passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
-    "rag_index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss"
+    "rag_passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_compressed",
+    "rag_index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_compressed.faiss"
   },
   "trainer": {
     "num_epochs": 50,
@@ -52,15 +54,9 @@
     },
     "grad_norm": 1.0,
     "grad_clipping": 10.0,
+    "num_gradient_accumulation_steps": 3,
     "checkpointer": {
       "num_serialized_models_to_keep": 2
-    },
-    "use_amp": true
-  },
-  "distributed": {
-    "cuda_devices": [
-      0,
-      1
-    ]
+    }
   }
 }
