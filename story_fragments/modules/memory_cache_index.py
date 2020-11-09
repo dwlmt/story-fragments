@@ -1,14 +1,18 @@
+import logging
+from collections import OrderedDict
 from typing import List, Tuple, Any
 
 import faiss
 import numpy as np
 
-from collections import OrderedDict
+
+logger = logging.getLogger(__name__)
 
 class OrderedDictCache:
     ''' Simple ordered dict.
     '''
-    def __init__(self, capacity: int, buffer=10, lru: bool = True, callback = None):
+
+    def __init__(self, capacity: int, buffer=10, lru: bool = True, callback=None):
         self.cache = OrderedDict()
         self.capacity = capacity
         self.buffer = buffer
@@ -58,18 +62,25 @@ class OrderedDictCache:
 
 
 class MemoryIndex:
-    def __init__(self,  capacity: int = 9900, buffer=100, lru: bool = True, **kwargs):
+    def __init__(self, embedding_dim=768, capacity: int = 9900, buffer=100, lru: bool = True, **kwargs):
+
+        self.embedding_dim = embedding_dim
+        self.id = 0
+
         self.init_index()
 
-        def remove_from_cache(items: List[Tuple]):
-            print(items)
+        def remove_from_cache(docs: List[Tuple]):
+            doc_ids = [d[0] for d in docs]
+            doc_ids_arr = np.asarray(doc_ids)
+            self.remove_ids(doc_ids_arr)
 
-        self.cache = OrderedDictCache(capacity=capacity, buffer=buffer, lru=lru, callback=remove_from_cache )
+        self.cache = OrderedDictCache(capacity=capacity, buffer=buffer, lru=lru, callback=remove_from_cache)
 
     def init_index(self):
         """ Initialise the Faiss index.
         """
-        pass#raise NotImplementedError()
+        index = faiss.IndexFlatIP(self.embedding_dim)
+        self.index = faiss.IndexIDMap2(index)
 
     def get_doc_dicts(self, doc_ids: np.ndarray) -> List[dict]:
         """ Get dictionary information from the requested docs.
@@ -77,15 +88,50 @@ class MemoryIndex:
         Args:
             doc_ids (ndarray):
         """
-        raise NotImplementedError()
+        doc_ids = doc_ids.flatten()
+        docs = []
+        for id in doc_ids:
+            doc_dict = self.cache.get(int(id))
+            if doc_dict is None:
+                doc_dict = {"id": f"{id}", "text": "<MISSING>", "title": "<MISSING",
+                            "embeddings": np.zeros(self.embedding_dim, dtype=np.float32)}
+            docs.append(doc_dict)
+
+        logging.debug(f"Doc Dicts: {doc_dict['id']}, {doc_dict['title']}, {doc_dict['text']}")
+        return docs
 
     def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: (int) = 5) -> Tuple[np.ndarray, np.ndarray]:
         """
         Args:
             question_hidden_states (ndarray): Question states to match against the Faiss index.
             n_docs (int): Number of docs to retrieve.
+
+        Returns:
+            :obj:`np.ndarray` of shape :obj:`(batch_size, n_docs)`: A tensor of indices of retrieved documents.
+            :obj:`np.ndarray` of shape :obj:`(batch_size, vector_size)`: A tensor of vector representations of retrieved documents.
         """
-        raise NotImplementedError()
+        assert len(question_hidden_states.shape) == 2
+
+        distances, indices, = self.index.search(np.float32(question_hidden_states), n_docs)
+
+        embeddings_list = []
+        for ind in indices:
+            nearest = []
+            for nearest_ind in ind:
+                item = self.cache.get(int(nearest_ind))
+
+                if item is not None:
+                    nearest.append(item['embeddings'])
+                else:
+                    nearest.append(np.zeros(self.embedding_dim, dtype=np.float32))
+
+            embeddings_list.append(nearest)
+
+        indices_array = np.asarray(indices)
+        embeddings_array = np.asarray(embeddings_list)
+
+        logging.debug(f"Top Docs: {indices}, {distances}")
+        return indices_array, embeddings_array
 
     def add(self, context_dicts: List[dict], context_hidden_states: np.ndarray):
         """ Add vectors and dicts to the index.
@@ -93,17 +139,31 @@ class MemoryIndex:
             context_dicts (List[dict]): A list of dictionaries with the representations. Must contain id, title and text fields.
             context_hidden_states (ndarray): The ndarray is batch size * dim.
         """
-        #print("Context", context_dicts, len(self.cache))
-        for i, item in enumerate(context_dicts):
-            self.cache.put(item["id"], item)
 
+        assert len(context_dicts) > 0
+        assert len(context_hidden_states.shape) == 2
+
+        context_hidden_states = np.float32(context_hidden_states)
+
+        id_list = []
+        for item, vec in zip(context_dicts, context_hidden_states):
+            item['embeddings'] = vec.tolist()
+            self.cache.put(self.id, item)
+            id_list.append(self.id)
+            self.id += 1
+
+        ids = np.asarray(id_list)
+
+        logger.debug(f"Add ids to Faiss: {ids}")
+        self.index.add_with_ids(context_hidden_states, ids)
 
     def remove_ids(self, doc_ids: np.ndarray) -> List[dict]:
         """ Remove from the dictionary and the Faiss index.
         Args:
             doc_ids (ndarray): Ids to remove.
         """
-        raise NotImplementedError()
+        logger.debug(f"Remove from Faiss: {doc_ids}")
+        self.index.remove_ids(doc_ids)
 
     def __len__(self):
         return len(self.cache)
