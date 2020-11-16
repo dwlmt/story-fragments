@@ -33,8 +33,8 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
         example_list = deque([])
 
         for i, window in enumerate(windowed_sentences):
-            input_text = window[input_size:]
-            label_text = window[:-label_size]
+            input_text = window[: input_size]
+            label_text = window[-label_size:]
             example = {
                 "id": f"{episode['id']}-{i}",
                 "episode_id": f"{episode['id']}",

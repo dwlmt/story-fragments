@@ -19,8 +19,8 @@ class WikiplotsInterleavedReader(DatasetReader):
     def __init__(self,
                  generator_model_name="facebook/bart-base",
                  generator_max_length: int = 128,
-                 encoder_model_name="facebook/dpr-question_encoder-single-nq-base",
-                 encoder_max_length: int = 128,
+                 encoder_model_name="facebook/dpr-question_encoder-multiset-base",
+                 encoder_max_length: int = 256,
                  add_special_tokens: bool = True,
                  train_split: int = 80,
                  validation_split: int = 10,
@@ -43,17 +43,20 @@ class WikiplotsInterleavedReader(DatasetReader):
         self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
                                                                   max_length=generator_max_length,
                                                                   add_special_tokens=add_special_tokens,
-                                                                  tokenizer_kwargs={"truncation": True})
+                                                                  )
         self.generator_indexers = {
-            "tokens": PretrainedTransformerIndexer(model_name=generator_model_name, max_length=generator_max_length)}
+            "tokens": PretrainedTransformerIndexer(model_name=generator_model_name, max_length=generator_max_length,
+
+                                                   )}
 
         self.encoder_tokenizer = PretrainedTransformerTokenizer(model_name=encoder_model_name,
                                                                 max_length=encoder_max_length,
                                                                 add_special_tokens=add_special_tokens,
-                                                                tokenizer_kwargs={"truncation": True})
+                                                                )
 
         self.encoder_indexers = {
-            "tokens": PretrainedTransformerIndexer(model_name=encoder_model_name, max_length=encoder_max_length)}
+            "tokens": PretrainedTransformerIndexer(model_name=encoder_model_name, max_length=encoder_max_length,
+                                                   )}
 
         assert (train_split + validation_split + test_split) == 100
 
