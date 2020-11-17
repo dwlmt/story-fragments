@@ -93,12 +93,28 @@ class MemoryIndex:
         for id in doc_ids:
             doc_dict = self.cache.get(int(id))
             if doc_dict is None:
-                doc_dict = {"id": f"{id}", "text": "<MISSING>", "title": "<MISSING",
+                doc_dict = {"id": f"{id}", "text": "<MISSING>", "title": "<MISSING>",
                             "embeddings": np.zeros(self.embedding_dim, dtype=np.float32)}
             docs.append(doc_dict)
 
         logging.debug(f"Doc Dicts: {doc_dict['id']}, {doc_dict['title']}, {doc_dict['text']}")
         return docs
+
+    def get_doc_dict(self, doc_id: int) -> List[dict]:
+        """ Get dictionary information from the requested docs.
+
+        Args:
+            doc_ids (int):
+        """
+
+        doc_dict = self.cache.get(str(int(doc_id)))
+        if doc_dict is None:
+            doc_dict = {"id": f"{id}", "text": "<MISSING>", "title": "<MISSING>",
+                        "embeddings": np.zeros(self.embedding_dim, dtype=np.float32)}
+
+        logging.debug(f"Doc Dicts: {doc_dict['id']}, {doc_dict['title']}, {doc_dict['text']}")
+
+        return doc_dict
 
     def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: (int) = 5) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -131,7 +147,7 @@ class MemoryIndex:
         embeddings_array = np.asarray(embeddings_list)
 
         logging.debug(f"Top Docs: {indices}, {distances}")
-        return indices_array, embeddings_array
+        return indices_array, embeddings_array, distances
 
     def add(self, context_dicts: List[dict], context_hidden_states: np.ndarray):
         """ Add vectors and dicts to the index.

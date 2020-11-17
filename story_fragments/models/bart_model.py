@@ -82,13 +82,14 @@ class BartFragmentsModel(Model):
         with torch.no_grad():
             # Only update metrics when not training to improve performance
             if not self.training:
-                self.metrics['lm_perplexity'](torch.mean(model_output.loss))
+                self.metrics['lm_perplexity'](torch.mean(model_output[0]))
 
-                logits = model_output[0]
+                logits = model_output[1]
 
                 mask = (label_tokens != PAD_TOKEN)
 
                 for acc in self.lm_accuracy_top_k:
+                    print(logits.size(), label_tokens.size())
                     self.metrics[f'lm_accuracy_{acc}'](logits, label_tokens, mask=mask)
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
