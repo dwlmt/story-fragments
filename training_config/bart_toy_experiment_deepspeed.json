@@ -6,52 +6,44 @@
         "type": "writingprompts-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 128,
         "lazy": true
       },
       "wikiplots-interleaved": {
         "type": "wikiplots-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 128,
         "lazy": true
       }
     }
   },
-  "train_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy_3_label_1_step_3/train\", \"writingprompts-interleaved\": \"writingprompts_dummy_3_label_1_step_3/train\"}",
-  "validation_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy_3_label_1_step_3/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy_3_label_1_step_3/validation\"}",
+  "train_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy/train\", \"writingprompts-interleaved\": \"writingprompts_dummy/train\"}",
+  "validation_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy/validation\"}",
   "data_loader": {
-    "batch_size": 4,
+    "batch_size": 16,
     "batches_per_epoch": 1000
   },
   "validation_data_loader": {
-    "batch_size": 4,
+    "batch_size": 16,
     "batches_per_epoch": 100
   },
   "model": {
-    "type": "rag-fragments",
-    "rotate_grad_training": false,
-    "generator_name": "facebook/bart-base",
-    "retriever_name": "facebook/rag-token-nq",
-    "index_name": "custom",
-    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
-    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
-    "gradient_checkpointing": true,
-    "ndocs": 5,
-    "max_combined_length": 512
+    "type": "bart-fragments",
+     "transformer_model_name": "facebook/bart-large"
   },
   "trainer": {
     "type": "deepspeed",
     "use_amp": false,
     "optimizer": {
       "type": "adam",
-      "lr": 1e-04,
+      "lr": 1e-03,
       "eps": 1e-04
     },
     "deepspeed_config": {
       "optimizer": {
         "params": {
-          "lr": 1e-04,
+          "lr": 1e-03,
           "eps": 1e-04,
           "weight_decay": 0.0
         },
@@ -67,18 +59,26 @@
       "zero_optimization": {
         "stage": 2,
         "allgather_partitions": true,
-        "allgather_bucket_size": 100000000,
+        "allgather_bucket_size": 50000000,
         "overlap_comm": true,
         "reduce_scatter": true,
-        "reduce_bucket_size": 100000000,
+        "reduce_bucket_size": 50000000,
         "contiguous_gradients" : true,
         "cpu_offload": true
       },
-      "fp32_allreduce": false
+      "activation_checkpointing": {
+        "partition_activations": true,
+        "cpu_checkpointing": true,
+        "contiguous_memory_optimization": true,
+        "number_checkpoints": null,
+        "synchronize_checkpoint_boundary": false,
+        "profile": true
+      },
+      "fp32_allreduce": true
     },
     "num_epochs": 5,
     "patience": 3,
-    "num_gradient_accumulation_steps": 1,
+    "num_gradient_accumulation_steps": 8,
     "checkpointer": {
       "num_serialized_models_to_keep": 2
     }

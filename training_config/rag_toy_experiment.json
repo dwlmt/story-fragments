@@ -32,18 +32,16 @@
     "type": "rag-fragments",
     "rotate_grad_training": true,
     "generator_name": "facebook/bart-base",
-    "rag_index_name": "custom",
-    "rag_passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
-    "rag_index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss"
+    "index_name": "custom",
+    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
+    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss"
   },
   "trainer": {
     "num_epochs": 50,
     "patience": 3,
     "optimizer": {
-      "type": "sgd",
-      "lr": 0.001,
-      "momentum": 0.9,
-      "nesterov": true
+      "type": "adam",
+      "lr": 0.0001
     },
     "learning_rate_scheduler": {
       "type": "reduce_on_plateau",
@@ -56,11 +54,5 @@
       "num_serialized_models_to_keep": 2
     },
     "use_amp": true
-  },
-  "distributed": {
-    "cuda_devices": [
-      0,
-      1
-    ]
   }
 }
