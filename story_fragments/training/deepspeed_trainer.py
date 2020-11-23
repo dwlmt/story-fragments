@@ -139,8 +139,7 @@ class DeepspeedTrainer(Trainer):
             local_rank,
             serialization_dir,
             self.data_loader.batch_size,
-            num_gradient_accumulation_steps,
-            None
+            num_gradient_accumulation_steps
         )
 
     def batch_outputs(self, batch: TensorDict, for_training: bool) -> Dict[str, torch.Tensor]:
@@ -595,6 +594,7 @@ class DeepspeedTrainer(Trainer):
 
         # make sure pending events are flushed to disk and files are closed properly
         self._tensorboard.close()
+        del self.model_engine
 
         # Load the best model state before returning
         best_model_state = self._checkpointer.best_model_state()

@@ -79,11 +79,10 @@ class DeepspeedConfig(FromParams):
             local_rank: int,
             serialization_dir: str,
             batch_size: int,
-            gradient_accumulation_steps: int,
-            cpu_optimizer: bool
+            gradient_accumulation_steps: int
     ):
         path = self._to_temp_file(serialization_dir, train_batch_size=batch_size,
-                                  gradient_accumulation_steps=gradient_accumulation_steps, cpu_optimizer=cpu_optimizer)
+                                  gradient_accumulation_steps=gradient_accumulation_steps)
         ds = deepspeed.initialize(
             args=self.build_deepspeed_args(path, local_rank),
             model=model,
