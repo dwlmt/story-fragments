@@ -46,7 +46,7 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  input_size: int = 1,
                  target_size: int = 1,
                  step_size: int = 1,
-                 batch_size: int = 100,
+                 batch_size: int = 60,
                  dummy: bool = False,
                  **kwargs):
         """ Generic config for reading a dataset in a interleaved or round robin fashion.
@@ -88,12 +88,12 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  dummy=True,
                                                  version=_VERSION),
-        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_dummy_3_label_1_step_3",
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_dummy_4_label_1_step_4",
                                                  description="Writing Prompts dummy for testng purposes.",
                                                  data_url=_URL,
-                                                 input_size=3,
+                                                 input_size=4,
                                                  target_size=1,
-                                                 step_size=3,
+                                                 step_size=4,
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  dummy=True,
@@ -105,11 +105,11 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  version=_VERSION),
-        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_3_label_1_step_3",
-                                                 description="Writing Prompts with 3 sentence steps.",
-                                                 input_size=3,
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_4_label_1_step_4",
+                                                 description="Writing Prompts with 4 sentence steps.",
+                                                 input_size=4,
                                                  target_size=1,
-                                                 step_size=3,
+                                                 step_size=4,
                                                  data_url=_URL,
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
@@ -190,5 +190,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
             for example in interleave_examples(reader, self.config.batch_size, self.config.input_size,
                                                self.config.target_size,
                                                self.config.step_size,
-                                               dummy=self.config.dummy):
+                                               dummy=self.config.dummy,
+                                               contractions=True):
                 yield example['id'], example

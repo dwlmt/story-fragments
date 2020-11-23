@@ -2,10 +2,16 @@ from collections import deque
 
 import more_itertools
 from blingfire import text_to_sentences
+from datasets import logger
+
+from story_fragments.data.contraction_utils import CONTRACTIONS_LIST
 
 
 def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
-                        label_size: int = 1, step_size: int = 1, dummy: bool = False, dummy_max_examples: int = 10000):
+                        label_size: int = 1, step_size: int = 1,
+                        dummy: bool = False,
+                        dummy_max_examples: int = 10000,
+                        contractions=False):
     """ Interleaves epsiodes examples, processes and returns as as dict.
 
     Args:
@@ -19,9 +25,17 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
 
     episodes_example_list = deque([])
 
+    id_counter = 0
     for episode in reader:
 
-        sentences = text_to_sentences(f"{episode['text']}").split('\n')
+        logger.info(f"{episode}")
+        text = f"{episode['text']}"
+
+        if contractions:
+            for e, r in CONTRACTIONS_LIST:
+                text = text.replace(e, r)
+
+        sentences = text_to_sentences(text).split('\n')
 
         # Skip episodes that are too short for the window.
         if len(sentences) <= input_size + label_size + step_size:
@@ -35,9 +49,15 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
         for i, window in enumerate(windowed_sentences):
             input_text = window[: input_size]
             label_text = window[-label_size:]
+
+            if 'id' in episode:
+                id = f"{episode['id']}"
+            else:
+                id = id_counter
+
             example = {
-                "id": f"{episode['id']}-{i}",
-                "episode_id": f"{episode['id']}",
+                "id": f"{id}-{i}",
+                "episode_id": id,
                 "episode_seq_num": i,
                 "title": f"{episode['title']}",
                 "text": " ".join(input_text),
@@ -47,6 +67,8 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
             }
 
             example_list.append(example)
+
+        id_counter += 1
 
         episodes_example_list.append(example_list)
 
