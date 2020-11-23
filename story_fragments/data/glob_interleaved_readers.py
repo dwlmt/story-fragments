@@ -132,3 +132,60 @@ class BookCorpusInterleavedReader(GlobCorpusInterleavedReader):
                                                           **kwargs
                                                           )
 
+
+@DatasetReader.register('schmoop-interleaved')
+class SchmoopCorpusInterleavedReader(GlobCorpusInterleavedReader):
+    ''' Interleaved version of the books corpus.
+
+    '''
+
+    def __init__(self,
+                 generator_model_name="facebook/bart-base",
+                 generator_max_length: int = 128,
+                 encoder_model_name="facebook/dpr-question_encoder-multiset-base",
+                 encoder_max_length: int = 256,
+                 add_special_tokens: bool = True,
+                 train_split: int = 80,
+                 validation_split: int = 10,
+                 test_split: int = 10,
+                 **kwargs):
+
+        super(SchmoopCorpusInterleavedReader, self).__init__(generator_model_name=generator_model_name,
+                                                          generator_max_length=generator_max_length,
+                                                          encoder_model_name=encoder_model_name,
+                                                          encoder_max_length=encoder_max_length,
+                                                          add_special_tokens=add_special_tokens,
+                                                          train_split=train_split,
+                                                          validation_split=validation_split,
+                                                          test_split=test_split,
+                                                          **kwargs
+                                                          )
+
+@DatasetReader.register('moviecorpus-interleaved')
+class MovieCorpusInterleavedReader(GlobCorpusInterleavedReader):
+    ''' Interleaved version of the books corpus.
+
+    '''
+
+    def __init__(self,
+                 generator_model_name="facebook/bart-base",
+                 generator_max_length: int = 128,
+                 encoder_model_name="facebook/dpr-question_encoder-multiset-base",
+                 encoder_max_length: int = 256,
+                 add_special_tokens: bool = True,
+                 train_split: int = 80,
+                 validation_split: int = 10,
+                 test_split: int = 10,
+                 **kwargs):
+
+        super(MovieCorpusInterleavedReader, self).__init__(generator_model_name=generator_model_name,
+                                                          generator_max_length=generator_max_length,
+                                                          encoder_model_name=encoder_model_name,
+                                                          encoder_max_length=encoder_max_length,
+                                                          add_special_tokens=add_special_tokens,
+                                                          train_split=train_split,
+                                                          validation_split=validation_split,
+                                                          test_split=test_split,
+                                                          **kwargs
+                                                          )
+

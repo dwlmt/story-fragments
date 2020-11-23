@@ -21,6 +21,7 @@ from __future__ import absolute_import, division, print_function
 import glob
 import os
 import pathlib
+from random import random, shuffle, Random
 from typing import Optional
 
 import datasets
@@ -41,6 +42,12 @@ _PROJECT_URL = ""
 _BOOK_CORPUS_URL = "https://the-eye.eu/public/AI/pile_preliminary_components/books1.tar.gz"
 _BOOK_CORPUS_GLOB_PATH = "**/*.epub.txt"
 
+_SCHMOOP_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1hhDWhVr1PhFfPj63h6MYACtfBttK_Usl"
+_SCHMOOP_CORPUS_GLOB_PATH = "**/*.txt.utf8"
+
+_MOVIE_CORPUS_URL = "https://drive.google.com/uc?export=download&id=16DBMpLY-w5ZF0yph-D3lhRjS_Cgwj-vZ"
+_MOVIE_CORPUS_GLOB_PATH = "**/scripts/parsed/full/*.txt"
+
 class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
 
     def __init__(self,
@@ -51,6 +58,7 @@ class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  step_size: int = 1,
                  batch_size: int = 60,
                  dummy: bool = False,
+                 shuffle: bool = True,
                  **kwargs):
         """ Generic config for reading a dataset in a interleaved or round robin fashion.
 
@@ -72,6 +80,7 @@ class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
         self.step_size = step_size
         self.batch_size = batch_size
         self.dummy = dummy
+        self.shuffle = True
 
         super(GlobInterleavedHfDatasetConfig, self).__init__(**kwargs)
 
@@ -81,12 +90,6 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
 
     BUILDER_CONFIG_CLASS = GlobInterleavedHfDatasetConfig
     BUILDER_CONFIGS = [
-        GlobInterleavedHfDatasetConfig(name="bookcorpus_dummy",
-                                       description="Writing Prompts dummy for testng purposes.",
-                                       data_url=_BOOK_CORPUS_URL,
-                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
-                                       dummy=True,
-                                       version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="bookcorpus_dummy_4_label_1_step_4",
                                        description="Writing Prompts dummy for testng purposes.",
                                        data_url=_BOOK_CORPUS_URL,
@@ -96,12 +99,6 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        step_size=4,
                                        dummy=True,
                                        version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="bookcorpus_context_1_label_1_step_1",
-                                       description="Writing Prompts with one sentence of context, "
-                                                             "labels and a one sentence step.",
-                                       data_url=_BOOK_CORPUS_URL,
-                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="bookcorpus_context_4_label_1_step_4",
                                        description="Writing Prompts with 4 sentence steps.",
                                        input_size=4,
@@ -109,6 +106,42 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        step_size=4,
                                        data_url=_BOOK_CORPUS_URL,
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="schmoop_dummy_4_label_1_step_4",
+                                       description="Schmoop dummy for testing purposes.",
+                                       data_url=_BOOK_CORPUS_URL,
+                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
+                                       input_size=4,
+                                       target_size=1,
+                                       step_size=4,
+                                       shuffle=False,
+                                       dummy=True,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="schmoop_context_4_label_1_step_4",
+                                       description="Schmoop with 4 sentence steps.",
+                                       input_size=4,
+                                       target_size=1,
+                                       step_size=4,
+                                       shuffle=False,
+                                       data_url=_BOOK_CORPUS_URL,
+                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="movie_dummy_4_label_1_step_4",
+                                       description="Movie script dummy for testing purposes.",
+                                       data_url=_MOVIE_CORPUS_URL,
+                                       glob_path=_MOVIE_CORPUS_GLOB_PATH,
+                                       input_size=4,
+                                       target_size=1,
+                                       step_size=4,
+                                       dummy=True,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="movie_context_4_label_1_step_4",
+                                       description="Movie script with 4 sentence steps.",
+                                       input_size=4,
+                                       target_size=1,
+                                       step_size=4,
+                                       data_url=_MOVIE_CORPUS_URL,
+                                       glob_path=_MOVIE_CORPUS_GLOB_PATH,
                                        version=_VERSION)
 
     ]
@@ -148,7 +181,12 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
     def _generate_examples(self, directory):
         glob_target = os.path.join(directory, self.config.glob_path)
         book_files = glob.glob(glob_target, recursive=True)
-        book_files = sorted(book_files)
+
+        if self.config.shuffle:
+            # Fix using the default Allennlp random seed.
+            Random(13370).shuffle(book_files)
+        else:
+            book_files = sorted(book_files)
 
         def _reader(book_files):
             _id = 0

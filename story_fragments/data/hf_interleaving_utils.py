@@ -37,6 +37,8 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
 
         sentences = text_to_sentences(text).split('\n')
 
+        #sentences = [s.lstrip('0123456789.- ') for s in sentences]
+
         # Skip episodes that are too short for the window.
         if len(sentences) <= input_size + label_size + step_size:
             continue
