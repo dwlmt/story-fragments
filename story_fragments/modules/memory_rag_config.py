@@ -52,11 +52,11 @@ class RagMemoryConfig(RagConfig):
         output_retrieved=False,
         use_dataset_retrieval=True,
         use_memory_retrieval=True,
-        memory_ndocs: int = 5,
+        memory_n_docs: int = 5,
         memory_capacity: int = 19000,
         memory_buffer=1000,
         memory_lru: bool = True,
-        combined_ndocs: int = 5,
+        combined_n_docs: int = 5,
         context_encoder = "facebook/dpr-ctx_encoder-multiset-base",
         **kwargs
     ):
@@ -91,9 +91,9 @@ class RagMemoryConfig(RagConfig):
 
         self.use_dataset_retrieval = use_dataset_retrieval
         self.use_memory_retrieval = use_memory_retrieval
-        self.memory_ndocs = memory_ndocs
+        self.memory_n_docs = memory_n_docs
         self.memory_capacity = memory_capacity
         self.memory_buffer = memory_buffer
         self.memory_lru = memory_lru
-        self.combined_ndocs = combined_ndocs
+        self.combined_n_docs = combined_n_docs
         self.context_encoder = context_encoder

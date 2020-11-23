@@ -48,12 +48,12 @@ class RagMemoryModel(RagModel):
         self.use_memory_retrieval = config.use_memory_retrieval
 
         if self.use_memory_retrieval:
-            self.ctx_encoder = DPRContextEncoder.from_pretrained(config.context_encoder)
-            freeze_part(self.ctx_encoder)
+            self.context_encoder = DPRContextEncoder.from_pretrained(config.context_encoder)
+            freeze_part(self.context_encoder)
 
             self.ctx_tokenizer = DPRContextEncoderTokenizerFast.from_pretrained(config.context_encoder)
         else:
-            self.ctx_encoder = None
+            self.context_encoder = None
             self.ctx_tokenizer = None
 
     def forward(
@@ -129,7 +129,7 @@ class RagMemoryModel(RagModel):
                 if self.use_memory_retrieval:
                     with torch.no_grad():
 
-                        ctx_enc_outputs = self.ctx_encoder(
+                        ctx_enc_outputs = self.context_encoder(
                             input_ids, attention_mask=attention_mask, return_dict=True
                         )
                         #logger.info(f"Context Encoded {ctx_enc_outputs}")
@@ -284,6 +284,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         logits = outputs.logits
         if labels is not None:
             assert decoder_input_ids is not None
+            #print(f"nll input: {outputs.logits.size()}, {outputs.doc_scores.size()}, {labels.size()} ")
             loss = self.get_nll(
                 outputs.logits,
                 outputs.doc_scores,
