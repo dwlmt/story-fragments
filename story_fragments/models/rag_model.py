@@ -6,34 +6,32 @@ import torch
 from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
 from allennlp.training.metrics import Perplexity, CategoricalAccuracy
-from story_fragments.modules.memory_model import RagMemoryTokenForGeneration
-from story_fragments.modules.memory_rag_config import RagMemoryConfig
-
-from story_fragments.modules.memory_retriever import RagMemoryRetriever
-from transformers import RagTokenizer, \
-    RagRetriever, RagTokenForGeneration, RagSequenceForGeneration, RagConfig
+from transformers import RagTokenizer, DPRQuestionEncoder, AutoTokenizer
 
 from story_fragments.models.utils import freeze_part, unfreeze_part
-
-from longformer import LongformerEncoderDecoderForConditionalGeneration, LongformerEncoderDecoderConfig
-from longformer.sliding_chunks import pad_to_window_size
+from story_fragments.modules.memory_model import RagMemoryTokenForGeneration
+from story_fragments.modules.memory_rag_config import RagMemoryConfig
+from story_fragments.modules.memory_retriever import RagMemoryRetriever
+from transformers import BartTokenizer, BartForConditionalGeneration
 
 PAD_TOKEN = 1
 
 logger = logging.getLogger(__name__)
 logger.setLevel("DEBUG")
 
+
 @Model.register('rag-fragments')
 class RagFragmentsModel(Model):
     def __init__(self,
                  vocab: Vocabulary,
-                 tokenizer_name: str = "facebook/rag-token-nq",
-                 question_encoder_name: str = "facebook/dpr-question_encoder-multiset-base",
-                 retriever_name: str = "facebook/rag-token-nq",
+                 tokenizer_name: str = "facebook/bart-base",
+                 question_encoder_name: str = "facebook/dpr-question_encoder-single-nq-base",
+                 retriever_name: str = "facebook/rag-token-base",
                  generator_name: str = "facebook/bart-base",
-                 long_attention_mode: str = "n2",
+                 context_encoder="facebook/dpr-ctx_encoder-multiset-base",
                  ndocs: int = 5,
-                 max_combined_length: int = 300,
+                 retrieval_batch_size: int = 16,
+                 max_combined_length: int = 512,
                  index_name: str = "exact",
                  use_dummy_dataset: bool = True,
                  passages_path: str = None,
@@ -42,20 +40,17 @@ class RagFragmentsModel(Model):
                  lm_accuracy_top_k: List[int] = [1, 5, 20],
                  gradient_checkpointing: bool = True,
                  rotate_grad_training: bool = False,
-                 use_dataset_retrieval: bool =True,
-                 use_memory_retrieval:  bool =True,
-                 memory_ndocs: int = 5,
-                 memory_capacity: int = 19000,
-                 memory_buffer=1000,
+                 use_dataset_retrieval: bool = True,
+                 use_memory_retrieval: bool = True,
+                 memory_n_docs: int = 5,
+                 memory_capacity: int = 9900,
+                 memory_buffer=100,
                  memory_lru: bool = True,
-                 combined_ndocs: int = 5,
-                 context_encoder="facebook/dpr-ctx_encoder-multiset-base",
+                 combined_n_docs: int = 5,
                  ):
         super().__init__(vocab)
 
-                # config = RagConfig.from_pretrained(model_name)
-        self.tokenizer = RagTokenizer.from_pretrained(tokenizer_name)
-        # self.question_encoder = DPRQuestionEncoder.from_pretrained(question_encoder_name)
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
         config = RagMemoryConfig.from_pretrained(retriever_name)
 
@@ -68,41 +63,28 @@ class RagFragmentsModel(Model):
         config.max_combined_length = max_combined_length
         config.gradient_checkpointing = gradient_checkpointing
 
+        config.retrieval_batch_size = retrieval_batch_size
+
         config.use_dataset_retrieval = use_dataset_retrieval
         config.use_memory_retrieval = use_memory_retrieval
-        config.memory_ndocs = memory_ndocs
+        config.memory_n_docs = memory_n_docs
         config.memory_capacity = memory_capacity
         config.memory_buffer = memory_buffer
         config.memory_lru = memory_lru
-        config.combined_ndocs = combined_ndocs
+        config.combined_n_docs = combined_n_docs
         config.context_encoder = context_encoder
 
         self.retriever = RagMemoryRetriever.from_pretrained(retriever_name,
-                                                      config=config)
+                                                            config=config)
 
         self.generator_name = generator_name
-        if "long" in generator_name:
-            from longformer import LongformerEncoderDecoderForConditionalGeneration, LongformerEncoderDecoderConfig
 
-            long_config = LongformerEncoderDecoderConfig.from_pretrained(generator_name)
-            long_config.attention_mode = long_attention_mode
-            long_config.gradient_checkpointing = gradient_checkpointing
-            self.long_config = long_config
-
-            generator = LongformerEncoderDecoderForConditionalGeneration.from_pretrained(generator_name,config=long_config)
-
-            generator_name = None
-        else:
-            generator = None
-            self.long_config = None
 
         self.model = RagMemoryTokenForGeneration.from_pretrained_question_encoder_generator(question_encoder_name,
-                                                                                      generator_name,
-                                                                                      config=config,
-                                                                                      generator_model=generator,
-                                                                                      retriever=self.retriever
-                                                                                      )
-
+                                                                                            generator_name,
+                                                                                            config=config,
+                                                                                            retriever=self.retriever
+                                                                                            )
 
         self.rag_ndocs = ndocs
 
@@ -136,10 +118,6 @@ class RagFragmentsModel(Model):
 
             label_tokens = labels["tokens"]['token_ids']
 
-            if "long" in self.generator_name and self.long_config.attention_mode in ('tvm','sliding_chunks'):
-                input_ids, input_mask = pad_to_window_size(
-                    input_ids, input_mask, self.long_config.attention_window[0], PAD_TOKEN)
-
             input_text_list = []
 
             for id, source_text in zip([m['id'] for m in metadata], [m['text'] for m in metadata]):
@@ -147,14 +125,14 @@ class RagFragmentsModel(Model):
                 input_text_dict["id"] = id
                 input_text_dict["text"] = source_text
                 input_text_dict["title"] = ""
-        
+
                 input_text_list.append(input_text_dict)
 
             model_output = self.model(input_ids=input_ids,
                                       attention_mask=input_mask,
                                       input_text_metadata=input_text_list,
                                       labels=label_tokens,
-                                      context_input_ids=torch.unsqueeze(input_ids,dim=1).repeat(1,5,1),
+                                      context_input_ids=torch.unsqueeze(input_ids, dim=1).repeat(1, 5, 1),
                                       context_attention_mask=torch.unsqueeze(input_mask, dim=1).repeat(1, 5, 1),
                                       output_retrieved=True,
                                       )
@@ -166,15 +144,15 @@ class RagFragmentsModel(Model):
             if not self.training:
                 label_mask = labels["tokens"]['mask']
                 self._update_metrics(model_output, label_tokens, label_mask)
-                self._add_retrieval_info(model_output, results)
+                self._add_retrieval_info(model_output, label_tokens, results)
 
         self._generate_if_required(input_ids, input_mask, num_sequences_to_generate, results)
 
         if self.training and self.rotate_grad_training:
             self.rotate_grad_parts_list.rotate(-1)
 
-
-        print(results)
+        results["input"] = metadata
+        logger.info(f"Results: {results}")
         return results
 
     def _pad(self, tensor, pad_to=1024, zeros=False, type=torch.long):
@@ -233,20 +211,28 @@ class RagFragmentsModel(Model):
 
                 self.metrics['lm_perplexity'](torch.mean(model_output.loss))
 
-                print("Logits", model_output.logits.size(), label_tokens.size())
-
                 num_docs = self.rag_ndocs
                 labels_batch_size = label_tokens.size()[0]
                 indices = range(0, labels_batch_size * num_docs, num_docs)
 
                 logits_indexed = model_output.logits[indices]
                 for acc in self.lm_accuracy_top_k:
-                    print(logits_indexed.size(), label_tokens.size())
                     self.metrics[f'lm_accuracy_{acc}'](logits_indexed, label_tokens, mask=label_mask)
 
-    def _add_retrieval_info(self, model_outputs, results):
+    def _add_retrieval_info(self, model_outputs, label_tokens, results):
         if not self.training:
             with torch.no_grad():
+
+                num_docs = self.rag_ndocs
+                labels_batch_size = label_tokens.size()[0]
+                indices = range(0, labels_batch_size * num_docs, num_docs)
+
+                logits_indexed = model_outputs.logits[indices]
+                logits_max = torch.argmax(logits_indexed,dim=-1)
+
+                results["predicted_tokens"] = logits_max
+                results["predicted_text"] = self.tokenizer.batch_decode(logits_max.cpu().tolist(), skip_special_tokens=True,
+                                                                        clean_up_tokenization_spaces=True)
 
                 docs_list = []
 
@@ -257,6 +243,7 @@ class RagFragmentsModel(Model):
 
                     dp_scores = model_outputs.doc_scores.softmax(dim=-1)[0]
 
+                    print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
                     doc_dicts = self.retriever.index.get_doc_dicts(model_outputs.retrieved_doc_ids)[0]
 
                     for doc_id, dl_score, dp_score, title, text in zip(doc_ids, dl_scores, dp_scores,
