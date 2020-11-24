@@ -21,9 +21,7 @@ from __future__ import absolute_import, division, print_function
 import glob
 import os
 import pathlib
-from random import random, shuffle, Random
-from typing import Optional
-
+from random import Random
 import datasets
 from datasets.info import SupervisedKeysData
 from story_fragments.data.hf_interleaving_utils import interleave_examples
@@ -47,6 +45,7 @@ _SCHMOOP_CORPUS_GLOB_PATH = "**/*.txt.utf8"
 
 _MOVIE_CORPUS_URL = "https://drive.google.com/uc?export=download&id=16DBMpLY-w5ZF0yph-D3lhRjS_Cgwj-vZ"
 _MOVIE_CORPUS_GLOB_PATH = "**/scripts/parsed/full/*.txt"
+
 
 class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
 
@@ -126,7 +125,7 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        data_url=_BOOK_CORPUS_URL,
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
                                        version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="movie_dummy_4_label_1_step_4",
+        GlobInterleavedHfDatasetConfig(name="moviecorpus_dummy_4_label_1_step_4",
                                        description="Movie script dummy for testing purposes.",
                                        data_url=_MOVIE_CORPUS_URL,
                                        glob_path=_MOVIE_CORPUS_GLOB_PATH,
@@ -135,7 +134,7 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        step_size=4,
                                        dummy=True,
                                        version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="movie_context_4_label_1_step_4",
+        GlobInterleavedHfDatasetConfig(name="moviecorpus_context_4_label_1_step_4",
                                        description="Movie script with 4 sentence steps.",
                                        input_size=4,
                                        target_size=1,
@@ -197,7 +196,8 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                     yield glob_dict
                     _id += 1
 
-        for example in interleave_examples(_reader(book_files=book_files), self.config.batch_size, self.config.input_size,
+        for example in interleave_examples(_reader(book_files=book_files), self.config.batch_size,
+                                           self.config.input_size,
                                            self.config.target_size,
                                            self.config.step_size,
                                            dummy=self.config.dummy):

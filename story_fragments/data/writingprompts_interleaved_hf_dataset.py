@@ -181,6 +181,7 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
             ),
         ]
 
+
     def _generate_examples(self, filepath, split):
         """ Yields an example for each story split by stories.
             The prompt is the title but also prepended to the main input_text.

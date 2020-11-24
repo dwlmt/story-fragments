@@ -1,3 +1,4 @@
+import re
 from collections import deque
 
 import more_itertools
@@ -6,6 +7,8 @@ from datasets import logger
 
 from story_fragments.data.contraction_utils import CONTRACTIONS_LIST
 
+
+_RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
 def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
                         label_size: int = 1, step_size: int = 1,
@@ -31,13 +34,27 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
         logger.info(f"{episode}")
         text = f"{episode['text']}"
 
-        if contractions:
-            for e, r in CONTRACTIONS_LIST:
-                text = text.replace(e, r)
+        def cleanup_text(text):
+            if contractions:
+                for e, r in CONTRACTIONS_LIST:
+                    text = text.replace(e, r)
+
+            text = text.replace("\t", " ")
+            text = text.replace("\n", " ")
+
+            if text.startswith('"'):
+                text = text[1:]
+            if text.endswith('"'):
+                text = text[:-1]
+
+            text = _RE_COMBINE_WHITESPACE.sub(" ", text).strip()
+
+            return text
 
         sentences = text_to_sentences(text).split('\n')
 
-        #sentences = [s.lstrip('0123456789.- ') for s in sentences]
+        sentences = [cleanup_text(s) for s in sentences]
+
 
         # Skip episodes that are too short for the window.
         if len(sentences) <= input_size + label_size + step_size:
