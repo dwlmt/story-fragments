@@ -89,7 +89,7 @@ class BartFragmentsModel(Model):
                 mask = (label_tokens != PAD_TOKEN)
 
                 for acc in self.lm_accuracy_top_k:
-                    print(logits.size(), label_tokens.size())
+                    #print(logits.size(), label_tokens.size())
                     self.metrics[f'lm_accuracy_{acc}'](logits, label_tokens, mask=mask)
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:

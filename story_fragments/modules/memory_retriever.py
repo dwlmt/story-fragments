@@ -15,11 +15,13 @@
 """RAG Retriever model implementation."""
 
 import os
+import re
 import time
 from typing import Iterable, List, Tuple
 
 import more_itertools
 import numpy as np
+import torch
 from more_itertools import chunked
 from torch import nn
 from transformers import RagConfig, RagTokenizer, logger, BatchEncoding, DPRContextEncoder, DPRContextEncoderTokenizer
@@ -302,7 +304,11 @@ class RagMemoryRetriever(RagRetriever):
                 a tuple consisting of two elements: contextualized ``input_ids`` and a compatible ``attention_mask``.
         """
 
+        _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
+
         def cat_input_and_doc(doc_title, doc_text, input_string, prefix):
+
+
 
             if doc_title.startswith('"'):
                 doc_title = doc_title[1:]
@@ -316,9 +322,9 @@ class RagMemoryRetriever(RagRetriever):
 
             if prefix is None:
                 prefix = ""
-            out = (prefix + doc_title + self.config.title_sep + doc_text + self.config.doc_sep + input_string).replace(
-                "  ", " "
-            )
+            out = (f"{prefix} {doc_title} {self.config.title_sep} {doc_text} {self.config.doc_sep} {input_string}")
+            out = _RE_COMBINE_WHITESPACE.sub(" ", out).strip()
+
             return out
 
         #print(f"Indices {len(docs)}, {n_docs}, {len(input_strings)}, {len( docs[0]['title'])},  {docs[0]['text']}")
@@ -340,6 +346,7 @@ class RagMemoryRetriever(RagRetriever):
             padding="max_length",
             truncation=True,
         )
+        logger.info(f"Contextualised inputs: {torch.sum((contextualized_inputs['input_ids'] != 1), dim=-1)}, {contextualized_inputs['input_ids'].size()} ")
 
         return contextualized_inputs["input_ids"], contextualized_inputs["attention_mask"]
 

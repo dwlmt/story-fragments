@@ -152,7 +152,7 @@ class RagFragmentsModel(Model):
             self.rotate_grad_parts_list.rotate(-1)
 
         results["input"] = metadata
-        logger.info(f"Results: {results}")
+        logger.debug(f"Results: {results}")
         return results
 
     def _pad(self, tensor, pad_to=1024, zeros=False, type=torch.long):
@@ -243,7 +243,7 @@ class RagFragmentsModel(Model):
 
                     dp_scores = model_outputs.doc_scores.softmax(dim=-1)[0]
 
-                    print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
+                    #print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
                     doc_dicts = self.retriever.index.get_doc_dicts(model_outputs.retrieved_doc_ids)[0]
 
                     for doc_id, dl_score, dp_score, title, text in zip(doc_ids, dl_scores, dp_scores,
