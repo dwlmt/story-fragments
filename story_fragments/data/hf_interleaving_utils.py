@@ -26,11 +26,7 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
     """
     # Iterate over a batch of the input_text.
 
-    episodes_example_list = deque([])
-
-    id_counter = 0
-    for episode in reader:
-
+    def read_episode(episode, id):
         logger.info(f"{episode}")
         text = f"{episode['text']}"
 
@@ -55,10 +51,9 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
 
         sentences = [cleanup_text(s) for s in sentences]
 
-
         # Skip episodes that are too short for the window.
         if len(sentences) <= input_size + label_size + step_size:
-            continue
+            return None
 
         windowed_sentences = list(
             more_itertools.windowed(sentences, n=input_size + label_size, fillvalue=" ", step=step_size))
@@ -72,7 +67,7 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
             if 'id' in episode:
                 id = f"{episode['id']}"
             else:
-                id = id_counter
+                id = f"{id}"
 
             example = {
                 "id": f"{id}-{i}",
@@ -86,20 +81,29 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
             }
 
             example_list.append(example)
+        return example_list
 
-        id_counter += 1
 
-        episodes_example_list.append(example_list)
+    def iterate_over_episodes(reader):
+        id_counter = 0
+        for episode in reader:
 
-    batch_list = []
+            id_counter += 1
+
+            example_list = read_episode(episode, id=id)
+            if example_list is not None:
+                yield example_list
+
+    episode_iterator = more_itertools.peekable(iterate_over_episodes(reader))
+    batch_list = [next(episode_iterator)]
 
     example_counter = 0
     # Keep going while episodes left.
-    while len(batch_list) > 0 or len(episodes_example_list) > 0:
+    while len(batch_list) > 0 or episode_iterator:
 
         # Add to the batch of episodes up to the batch size.
-        while len(batch_list) < batch_size and len(episodes_example_list) > 0:
-            batch_list.append(episodes_example_list.popleft())
+        while len(batch_list) < batch_size and episode_iterator:
+            batch_list.append(next(episode_iterator))
 
         # Yield the next example from each episode.
         for episode in batch_list:

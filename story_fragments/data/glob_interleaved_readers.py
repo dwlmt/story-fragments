@@ -1,4 +1,5 @@
 import os
+from random import random, randint
 from typing import Dict, Iterable
 
 from allennlp.data import DatasetReader, Instance
@@ -22,7 +23,8 @@ class GlobCorpusInterleavedReader(DatasetReader):
                  train_split: int = 80,
                  validation_split: int = 10,
                  test_split: int = 10,
-                 **kwargs):
+                 manual_shards: int = 10,
+                 lazy: bool = True):
         """
 
         Args:
@@ -36,7 +38,7 @@ class GlobCorpusInterleavedReader(DatasetReader):
             test_split (int): % test split.
             **kwargs:
         """
-        super().__init__(**kwargs)
+        super().__init__(lazy=lazy)
         self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
                                                                   max_length=generator_max_length,
                                                                   add_special_tokens=add_special_tokens,
@@ -60,6 +62,8 @@ class GlobCorpusInterleavedReader(DatasetReader):
         self.train_split = train_split
         self.validation_split = validation_split
         self.test_split = test_split
+
+        self.manual_shards = manual_shards
 
     def text_to_instance(self, example: Dict) -> Instance:
         fields = {}
@@ -87,7 +91,16 @@ class GlobCorpusInterleavedReader(DatasetReader):
         Returns: Instance
 
         '''
-        config, split = file_path.split('/')
+        split_arr = file_path.split('/')
+        config = split_arr[0]
+        split = split_arr[1]
+
+        if len(split_arr) == 4:
+            shard_index = int(split_arr[2])
+            world_size = int(split_arr[3])
+        else:
+            shard_index = None
+            world_size = None
 
         if split == "train":
             dataset = load_dataset(f"{os.path.dirname(__file__)}/glob_interleaved_hf_dataset.py", name=config,
@@ -100,6 +113,20 @@ class GlobCorpusInterleavedReader(DatasetReader):
                                    split=f'train[-{self.test_split}%:]')
 
         print(dataset)
+
+        if shard_index is not None:
+            dataset = dataset.shard(world_size, shard_index, contiguous=True)
+
+        if self.manual_shards > 1:
+            total_num_examples = len(dataset)
+            shard_size = int(total_num_examples / self.manual_shards)
+            shard = randint(0, self.manual_shards - 1)
+            start = shard * shard_size
+            finish = min(start + shard_size, total_num_examples - 1)
+            index_range = [r for r in range(start, finish+1)]
+            dataset = dataset.select(index_range)
+
+
         for example in dataset:
             yield self.text_to_instance(example)
 

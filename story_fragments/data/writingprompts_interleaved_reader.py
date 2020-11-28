@@ -1,4 +1,6 @@
+import logging
 import os
+from random import random, randint
 from typing import Dict, Iterable
 
 from allennlp.data import DatasetReader, Instance
@@ -7,6 +9,7 @@ from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from datasets import load_dataset
 
+logger = logging.getLogger(__name__)
 
 @DatasetReader.register('writingprompts-interleaved')
 class WritingPromptsInterleavedReader(DatasetReader):
@@ -20,7 +23,8 @@ class WritingPromptsInterleavedReader(DatasetReader):
                  encoder_model_name="facebook/dpr-question_encoder-multiset-base",
                  encoder_max_length: int = 256,
                  add_special_tokens: bool = True,
-                 **kwargs):
+                 manual_shards: int = 10,
+                 lazy: bool = True):
         """
         Args:
             generator_model_name (str): Name of the model used for the generator tokenizer.
@@ -30,7 +34,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
             add_special_tokens (bool): Whether to add the special tokens.
             **kwargs: Additional args.
         """
-        super().__init__(**kwargs)
+        super().__init__(lazy=lazy)
 
         self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
                                                                   max_length=generator_max_length,
@@ -48,6 +52,8 @@ class WritingPromptsInterleavedReader(DatasetReader):
         self.encoder_indexers = {
             "tokens": PretrainedTransformerIndexer(model_name=encoder_model_name, max_length=encoder_max_length,
                                                    )}
+
+        self.manual_shards = manual_shards
 
     def text_to_instance(self, example: Dict) -> Instance:
         fields = {}
@@ -75,10 +81,32 @@ class WritingPromptsInterleavedReader(DatasetReader):
         Returns: Instance
 
         '''
-        config, split = file_path.split('/')
+
+        split_arr = file_path.split('/')
+        config = split_arr[0]
+        split = split_arr[1]
+
+        if len(split_arr) == 4:
+            shard_index = int(split_arr[2])
+            world_size = int(split_arr[3])
+        else:
+            shard_index = None
+            world_size = None
 
         dataset = load_dataset(f"{os.path.dirname(__file__)}/writingprompts_interleaved_hf_dataset.py", name=config,
                                split=split)
+
+        if shard_index is not None:
+            dataset = dataset.shard(world_size, shard_index, contiguous=True)
+
+        if self.manual_shards > 1:
+            total_num_examples = len(dataset)
+            shard_size = int(total_num_examples / self.manual_shards)
+            shard = randint(0, self.manual_shards - 1)
+            start = shard * shard_size
+            finish = min(start + shard_size, total_num_examples - 1)
+            index_range = [r for r in range(start, finish + 1)]
+            dataset = dataset.select(index_range)
 
         for example in dataset:
             yield self.text_to_instance(example)
