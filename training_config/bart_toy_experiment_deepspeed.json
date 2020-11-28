@@ -77,7 +77,7 @@
       "fp32_allreduce": true
     },
     "num_epochs": 5,
-    "patience": 3,
+    "patience": 2,
     "num_gradient_accumulation_steps": 8,
     "checkpointer": {
       "num_serialized_models_to_keep": 2

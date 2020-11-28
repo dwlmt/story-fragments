@@ -4,14 +4,14 @@
     "readers": {
       "writingprompts-interleaved": {
         "type": "writingprompts-interleaved",
-        "generator_model_name": "facebook/bart-base",
+        "generator_model_name": "t5-base",
         "generator_max_length": 128,
         "encoder_max_length": 256,
         "lazy": true
       },
       "wikiplots-interleaved": {
         "type": "wikiplots-interleaved",
-        "generator_model_name": "facebook/bart-base",
+        "generator_model_name": "t5-base",
         "generator_max_length": 128,
         "encoder_max_length": 256,
         "lazy": true
@@ -31,7 +31,7 @@
   "model": {
     "type": "rag-fragments",
     "rotate_grad_training": true,
-    "generator_name": "facebook/bart-large",
+    "generator_name": "t5-base",
     "retriever_name": "facebook/rag-token-nq",
     "index_name": "custom",
     "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
@@ -71,10 +71,10 @@
       "zero_optimization": {
         "stage": 2,
         "allgather_partitions": true,
-        "allgather_bucket_size": 50000000,
+        "allgather_bucket_size": 100000000,
         "overlap_comm": true,
         "reduce_scatter": true,
-        "reduce_bucket_size": 50000000,
+        "reduce_bucket_size": 100000000,
         "contiguous_gradients" : true,
         "cpu_offload": true
       },
@@ -90,9 +90,7 @@
   "distributed": {
     "cuda_devices": [
       0,
-      1,
-      2,
-      3
+      1
     ]
   }
 }

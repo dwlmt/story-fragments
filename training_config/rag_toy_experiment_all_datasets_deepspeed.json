@@ -2,35 +2,56 @@
   "dataset_reader": {
     "type": "interleaving",
     "readers": {
+      "moviecorpus-interleaved": {
+        "type": "moviecorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 256,
+        "lazy": false
+      },
+      "schmoop-interleaved": {
+        "type": "schmoop-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 256,
+        "lazy": false
+      },
+      "bookcorpus-interleaved": {
+        "type": "bookcorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 256,
+        "lazy": false
+      },
       "writingprompts-interleaved": {
         "type": "writingprompts-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 256,
-        "lazy": true
+        "lazy": false
       },
       "wikiplots-interleaved": {
         "type": "wikiplots-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 256,
-        "lazy": true
+        "lazy": false
       }
     }
   },
-  "train_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy_4_label_1_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/train\"}",
-  "validation_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy_4_label_1_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/validation\"}",
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_4_label_1_step_4/train\", \"schmoop-interleaved\": \"schmoop_dummy_4_label_1_step_4/train\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_4_label_1_step_4/train\", \"wikiplots-interleaved\": \"wikiplots_dummy_4_label_1_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/train\"}",
+  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_4_label_1_step_4/validation\", \"schmoop-interleaved\": \"schmoop_dummy_4_label_1_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_4_label_1_step_4/validation\", \"wikiplots-interleaved\": \"wikiplots_dummy_4_label_1_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/validation\"}",
   "data_loader": {
-    "batch_size": 8,
+    "batch_size": 16,
     "batches_per_epoch": 1000
   },
   "validation_data_loader": {
-    "batch_size": 8,
+    "batch_size": 16,
     "batches_per_epoch": 100
   },
   "model": {
     "type": "rag-fragments",
-    "rotate_grad_training": true,
+    "rotate_grad_training": false,
     "generator_name": "facebook/bart-large",
     "retriever_name": "facebook/rag-token-nq",
     "index_name": "custom",
@@ -47,13 +68,13 @@
     "optimizer": {
       "type": "adam",
         "lr": 1e-05,
-        "eps": 1e-04
+        "eps": 1e-06
     },
     "deepspeed_config": {
       "optimizer": {
         "params": {
           "lr": 1e-05,
-          "eps": 1e-04
+          "eps": 1e-06
         },
         "type": "Adam"
       },
@@ -62,19 +83,15 @@
         "enabled": false
       },
       "fp16": {
-        "enabled": true,
-        "loss_scale": 0,
-        "loss_scale_window": 1000,
-        "hysteresis": 2,
-        "min_loss_scale": 1
+        "enabled": true
       },
       "zero_optimization": {
         "stage": 2,
         "allgather_partitions": true,
-        "allgather_bucket_size": 50000000,
+        "allgather_bucket_size": 100000000,
         "overlap_comm": true,
         "reduce_scatter": true,
-        "reduce_bucket_size": 50000000,
+        "reduce_bucket_size": 100000000,
         "contiguous_gradients" : true,
         "cpu_offload": true
       },
@@ -82,7 +99,7 @@
     },
     "num_epochs": 5,
     "patience": 2,
-    "num_gradient_accumulation_steps": 4,
+    "num_gradient_accumulation_steps": 8,
     "checkpointer": {
       "num_serialized_models_to_keep": 1
     }
@@ -90,9 +107,7 @@
   "distributed": {
     "cuda_devices": [
       0,
-      1,
-      2,
-      3
+      1
     ]
   }
 }

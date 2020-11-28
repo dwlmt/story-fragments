@@ -40,7 +40,7 @@
   },
   "trainer": {
     "num_epochs": 50,
-    "patience": 3,
+    "patience": 2,
     "optimizer": {
       "type": "sgd",
       "lr": 0.001,

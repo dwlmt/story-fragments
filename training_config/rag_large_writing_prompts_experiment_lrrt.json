@@ -2,14 +2,17 @@
   "dataset_reader": {
     "type": "interleaving",
     "readers": {
-      "writingprompts-interleaved": {
+      "writingprompts-interleaved":
+      {
         "type": "writingprompts-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 256,
         "lazy": true
-      },
-      "wikiplots-interleaved": {
+      }
+      ,
+      "wikiplots-interleaved":
+      {
         "type": "wikiplots-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
@@ -21,16 +24,16 @@
   "train_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy_4_label_1_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/train\"}",
   "validation_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy_4_label_1_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/validation\"}",
   "data_loader": {
-    "batch_size": 8,
-    "batches_per_epoch": 1000
+    "batch_size": 4,
+    "batches_per_epoch": 10000
   },
   "validation_data_loader": {
-    "batch_size": 8,
-    "batches_per_epoch": 100
+    "batch_size": 4,
+    "batches_per_epoch": 1000
   },
   "model": {
     "type": "rag-fragments",
-    "rotate_grad_training": true,
+    "rotate_grad_training": false,
     "generator_name": "facebook/bart-large",
     "retriever_name": "facebook/rag-token-nq",
     "index_name": "custom",
@@ -47,13 +50,13 @@
     "optimizer": {
       "type": "adam",
         "lr": 1e-05,
-        "eps": 1e-04
+        "eps": 1e-06
     },
     "deepspeed_config": {
       "optimizer": {
         "params": {
           "lr": 1e-05,
-          "eps": 1e-04
+          "eps": 1e-06
         },
         "type": "Adam"
       },
@@ -62,27 +65,32 @@
         "enabled": false
       },
       "fp16": {
-        "enabled": true,
-        "loss_scale": 0,
-        "loss_scale_window": 1000,
-        "hysteresis": 2,
-        "min_loss_scale": 1
+        "enabled": true
       },
       "zero_optimization": {
         "stage": 2,
         "allgather_partitions": true,
-        "allgather_bucket_size": 50000000,
         "overlap_comm": true,
         "reduce_scatter": true,
-        "reduce_bucket_size": 50000000,
+        "reduce_bucket_size": 25000000,
+        "allgather_bucket_size": 25000000,
         "contiguous_gradients" : true,
         "cpu_offload": true
       },
-      "fp32_allreduce": false
+     "fp32_allreduce": false,
+     "scheduler": {
+       "type": "LRRangeTest",
+       "params": {
+         "lr_range_test_min_lr": 0.00001,
+         "lr_range_test_step_size": 200,
+         "lr_range_test_step_rate": 5,
+         "lr_range_test_staircase": false
+       }
+     }
     },
-    "num_epochs": 5,
+    "num_epochs": 1,
     "patience": 2,
-    "num_gradient_accumulation_steps": 4,
+    "num_gradient_accumulation_steps": 1,
     "checkpointer": {
       "num_serialized_models_to_keep": 1
     }
