@@ -7,24 +7,21 @@
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 256,
-        "lazy": true,
-        "manual_shards": 5
+        "lazy": true
       },
       "schmoop-interleaved": {
         "type": "schmoop-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 256,
-        "lazy": true,
-        "manual_shards": 5
+        "lazy": true
       },
       "bookcorpus-interleaved": {
         "type": "bookcorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 256,
-        "lazy": true,
-        "manual_shards": 30
+        "lazy": true
       },
       "writingprompts-interleaved": {
         "type": "writingprompts-interleaved",
@@ -45,25 +42,16 @@
   "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_1_step_4/train\", \"schmoop-interleaved\": \"schmoop_context_4_label_1_step_4/train\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_1_step_4/train\", \"wikiplots-interleaved\": \"wikiplots_context_4_label_1_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_context_4_label_1_step_4/train\"}",
   "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_1_step_4/validation\", \"schmoop-interleaved\": \"schmoop_context_4_label_1_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_1_step_4/validation\", \"wikiplots-interleaved\": \"wikiplots_context_4_label_1_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_context_4_label_1_step_4/validation\"}",
   "data_loader": {
-    "batch_size": 4,
+    "batch_size": 8,
     "batches_per_epoch": 20000
   },
   "validation_data_loader": {
-    "batch_size": 4,
+    "batch_size": 8,
     "batches_per_epoch": 2000
   },
   "model": {
-    "type": "rag-fragments",
-    "rotate_grad_training": false,
-    "generator_name": "facebook/bart-large",
-    "retriever_name": "facebook/rag-token-nq",
-    "index_name": "custom",
-    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
-    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
-    "gradient_checkpointing": true,
-    "ndocs": 5,
-    "max_combined_length": 512,
-    "use_memory_retrieval": true
+    "type": "from_archive",
+    "archive_file": "/home/s1569885/runs/rag_base_all_datasets_55987_2020_11_28_181353/model.tar.gz"
   },
    "trainer": {
     "type": "deepspeed",
@@ -100,9 +88,9 @@
       },
      "fp32_allreduce": false
     },
-    "num_epochs": 100,
-    "patience": 2,
-    "num_gradient_accumulation_steps": 1,
+    "num_epochs": 50,
+    "patience": 3,
+    "num_gradient_accumulation_steps": 2,
     "checkpointer": {
       "num_serialized_models_to_keep": 1
     }

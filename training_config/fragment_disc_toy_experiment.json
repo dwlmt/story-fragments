@@ -1,6 +1,7 @@
 {
   "dataset_reader": {
-    "type": "interleaving",
+    "type": "interleaving-batch",
+    "batch_size": 16,
     "readers": {
       "writingprompts-interleaved": {
         "type": "writingprompts-interleaved",
@@ -11,26 +12,25 @@
       }
     }
   },
-  "train_data_path": "{ \"writingprompts-interleaved\": \"writingprompts_context_4_label_1_step_4/train\"}",
-  "validation_data_path": "{ \"writingprompts-interleaved\": \"writingprompts_context_4_label_1_step_4/validation\"}",
+  "train_data_path": "{ \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/train\"}",
+  "validation_data_path": "{ \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/validation\"}",
   "model": {
-    "type": "sbert-disc-fragments",
-    "generator_name": "facebook/bart-base",
-    "retriever_name": "facebook/rag-token-nq",
+    "type": "disc-fragments",
     "index_name": "custom",
     "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
     "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
     "gradient_checkpointing": true,
     "ndocs": 5,
-    "max_combined_length": 512
+    "max_combined_length": 256
   },
   "data_loader": {
     "batch_size": 16,
-    "batches_per_epoch": 20000
+    "batches_per_epoch": 1000
   },
+  
   "validation_data_loader": {
     "batch_size": 16,
-    "batches_per_epoch": 2000
+    "batches_per_epoch": 100
   },
   "trainer": {
     "type": "deepspeed",
