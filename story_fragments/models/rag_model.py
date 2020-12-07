@@ -6,13 +6,12 @@ import torch
 from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
 from allennlp.training.metrics import Perplexity, CategoricalAccuracy
-from transformers import RagTokenizer, DPRQuestionEncoder, AutoTokenizer
+from transformers import AutoTokenizer
 
 from story_fragments.models.utils import freeze_part, unfreeze_part
 from story_fragments.modules.memory_model import RagMemoryTokenForGeneration
 from story_fragments.modules.memory_rag_config import RagMemoryConfig
 from story_fragments.modules.memory_retriever import RagMemoryRetriever
-from transformers import BartTokenizer, BartForConditionalGeneration
 
 PAD_TOKEN = 1
 
@@ -30,9 +29,9 @@ class RagFragmentsModel(Model):
                  generator_name: str = "facebook/bart-base",
                  context_encoder="facebook/dpr-ctx_encoder-multiset-base",
                  ndocs: int = 5,
-                 retrieval_batch_size: int = 16,
+                 retrieval_batch_size: int = 32,
                  max_combined_length: int = 512,
-                 index_name: str = "exact",
+                 index_name: str = "custom",
                  use_dummy_dataset: bool = True,
                  passages_path: str = None,
                  index_path: str = None,
@@ -43,7 +42,7 @@ class RagFragmentsModel(Model):
                  use_dataset_retrieval: bool = True,
                  use_memory_retrieval: bool = True,
                  memory_n_docs: int = 5,
-                 memory_capacity: int = 9900,
+                 memory_capacity: int = 19900,
                  memory_buffer=100,
                  memory_lru: bool = True,
                  combined_n_docs: int = 5,
@@ -79,7 +78,6 @@ class RagFragmentsModel(Model):
 
         self.generator_name = generator_name
 
-
         self.model = RagMemoryTokenForGeneration.from_pretrained_question_encoder_generator(question_encoder_name,
                                                                                             generator_name,
                                                                                             config=config,
@@ -106,6 +104,8 @@ class RagFragmentsModel(Model):
                 dataset: List[str] = None,
                 num_sequences_to_generate: int = 0,
                 ) -> Dict[str, torch.Tensor]:
+
+        logger.debug(f"Input: {metadata}")
 
         self._freeze_params_if_required()
 
@@ -168,22 +168,22 @@ class RagFragmentsModel(Model):
         unfreeze_part(self.model)
         unfreeze_part(self.model.shared)
         unfreeze_part(self.model.question_encoder)
-        unfreeze_part(self.model.generator.model.encoder)
-        unfreeze_part(self.model.generator.model.decoder)
+        unfreeze_part(self.model.generator.context_model.encoder)
+        unfreeze_part(self.model.generator.context_model.decoder)
 
     def _freeze_params_if_required(self):
         if self.training and self.rotate_grad_training:
             freeze_part(self.model.question_encoder)
-            freeze_part(self.model.generator.model.encoder)
-            freeze_part(self.model.generator.model.decoder)
+            freeze_part(self.model.generator.context_model.encoder)
+            freeze_part(self.model.generator.context_model.decoder)
 
             part_to_unfreeze = self.rotate_grad_parts_list[0]
             if part_to_unfreeze == "question_encoder":
                 unfreeze_part(self.model.question_encoder)
             elif part_to_unfreeze == "encoder":
-                unfreeze_part(self.model.generator.model.encoder)
+                unfreeze_part(self.model.generator.context_model.encoder)
             elif part_to_unfreeze == "decoder":
-                unfreeze_part(self.model.generator.model.decoder)
+                unfreeze_part(self.model.generator.context_model.decoder)
 
     def _generate_if_required(self, input_ids, input_mask, num_sequences_to_generate, results):
         if not self.training and num_sequences_to_generate > 0:
@@ -228,10 +228,11 @@ class RagFragmentsModel(Model):
                 indices = range(0, labels_batch_size * num_docs, num_docs)
 
                 logits_indexed = model_outputs.logits[indices]
-                logits_max = torch.argmax(logits_indexed,dim=-1)
+                logits_max = torch.argmax(logits_indexed, dim=-1)
 
                 results["predicted_tokens"] = logits_max
-                results["predicted_text"] = self.tokenizer.batch_decode(logits_max.cpu().tolist(), skip_special_tokens=True,
+                results["predicted_text"] = self.tokenizer.batch_decode(logits_max.cpu().tolist(),
+                                                                        skip_special_tokens=True,
                                                                         clean_up_tokenization_spaces=True)
 
                 docs_list = []
@@ -243,7 +244,7 @@ class RagFragmentsModel(Model):
 
                     dp_scores = model_outputs.doc_scores.softmax(dim=-1)[0]
 
-                    #print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
+                    # print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
                     doc_dicts = self.retriever.index.get_doc_dicts(model_outputs.retrieved_doc_ids)[0]
 
                     for doc_id, dl_score, dp_score, title, text in zip(doc_ids, dl_scores, dp_scores,

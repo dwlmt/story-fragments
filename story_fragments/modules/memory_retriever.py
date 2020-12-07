@@ -14,23 +14,17 @@
 # limitations under the License.
 """RAG Retriever model implementation."""
 
-import os
 import re
 import time
-from typing import Iterable, List, Tuple
+from typing import List, Tuple
 
-import more_itertools
 import numpy as np
-import torch
 from more_itertools import chunked
-from torch import nn
-from transformers import RagConfig, RagTokenizer, logger, BatchEncoding, DPRContextEncoder, DPRContextEncoderTokenizer
-from transformers.file_utils import requires_datasets, requires_faiss
+from transformers import logger, BatchEncoding
 from transformers.retrieval_rag import CustomHFIndex, RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CanonicalHFIndex
+from transformers.utils import logging
 
 from story_fragments.modules.memory_cache_index import MemoryIndex
-
-from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
@@ -62,8 +56,7 @@ class CustomMemoryHFIndex(CustomHFIndex):
         for i in range(len(vectors)):
             if len(vectors[i]) < n_docs:
                 vectors[i] = np.vstack([vectors[i], np.zeros((n_docs - len(vectors[i]), self.vector_size))])
-        return np.array(ids), np.array(vectors), distances # shapes (batch_size, n_docs) and (batch_size, n_docs, d)
-
+        return np.array(ids), np.array(vectors), distances  # shapes (batch_size, n_docs) and (batch_size, n_docs, d)
 
     def get_doc_dict(self, doc_id: int):
 
@@ -102,7 +95,6 @@ class RagMemoryRetriever(RagRetriever):
 
         else:
             self.memory_index = None
-
 
         self.use_dataset_retrieval = config.use_dataset_retrieval
         self.use_memory_retrieval = config.use_memory_retrieval
@@ -161,7 +153,8 @@ class RagMemoryRetriever(RagRetriever):
             for question_hidden_states in self._chunk_tensor(question_hidden_states, self.batch_size):
                 start_time = time.time()
 
-                memory_ids, memory_vectors, memory_distances = self.memory_index.get_top_docs(question_hidden_states, self.config.memory_n_docs)
+                memory_ids, memory_vectors, memory_distances = self.memory_index.get_top_docs(question_hidden_states,
+                                                                                              self.config.memory_n_docs)
                 logger.debug(f"Memory retrieval: {memory_ids}, {memory_vectors.shape}, {memory_distances}")
                 logger.debug(
                     "memory index search time: {} sec, batch size {}".format(
@@ -178,8 +171,7 @@ class RagMemoryRetriever(RagRetriever):
                     source_batched.append(np.zeros(memory_ids.shape, dtype=np.int))
                     distances_batched.append(memory_distances)
 
-
-        #print(f"Ids batched: {ids_batched}")
+        # print(f"Ids batched: {ids_batched}")
 
         if self.use_memory_retrieval and self.use_dataset_retrieval:
             if len(ids_batched) == 1:
@@ -189,24 +181,22 @@ class RagMemoryRetriever(RagRetriever):
                 sources_arr = np.array(source_batched[0])
 
             else:
-                ids_arr = np.concatenate([np.array(a) for a in ids_batched],axis=1)
+                ids_arr = np.concatenate([np.array(a) for a in ids_batched], axis=1)
                 vectors_arr = np.concatenate([np.array(a) for a in vectors_batched], axis=1)
                 distances_arr = np.concatenate([np.array(a) for a in distances_batched], axis=1)
                 sources_arr = np.concatenate([np.array(a) for a in source_batched], axis=1)
 
-            #print(f"Ids concat: {ids_arr}")
+            # print(f"Ids concat: {ids_arr}")
 
             if ids_arr.shape[1] > self.config.combined_n_docs:
-
-                sorted_indices = np.argsort(-(distances_arr),axis=1)
+                sorted_indices = np.argsort(-(distances_arr), axis=1)
 
                 ids_arr = np.take_along_axis(ids_arr, sorted_indices, axis=1)
                 distances_arr = np.take_along_axis(distances_arr, sorted_indices, axis=1)
                 vectors_arr = np.take_along_axis(vectors_arr, np.expand_dims(sorted_indices, axis=2), axis=1)
                 sources_arr = np.take_along_axis(sources_arr, sorted_indices, axis=1)
 
-                #print(f"Sorted: {ids_arr}, {distances_arr}")
-
+                # print(f"Sorted: {ids_arr}, {distances_arr}")
 
                 ids_arr = ids_arr[:, 0: n_docs]
                 distances_arr = distances_arr[:, 0: n_docs]
@@ -220,7 +210,7 @@ class RagMemoryRetriever(RagRetriever):
             distances_arr = np.array(distances_batched[0])
             sources_arr = np.array(source_batched[0])
 
-        #print(f"Truncated: {ids_arr}, {distances_arr}")
+        # print(f"Truncated: {ids_arr}, {distances_arr}")
 
         return (
             ids_arr,
@@ -252,22 +242,22 @@ class RagMemoryRetriever(RagRetriever):
         doc_ids, retrieved_doc_embeds, distances, sources = self._main_retrieve(question_hidden_states, n_docs)
 
         doc_dicts = []
-        #print(f"Doc ids: {doc_ids}")
+        # print(f"Doc ids: {doc_ids}")
         for doc, source in zip(doc_ids, sources):
             for d, s in zip(doc, source):
 
                 if int(s) == int(1):
-                    #print(f"Get from dataset: {d}, {s}")
-                    doc_dict =  self.index.get_doc_dict(int(d))
-                    #print(f"Dataset doc dict: {d}, {s}")
+                    # print(f"Get from dataset: {d}, {s}")
+                    doc_dict = self.index.get_doc_dict(int(d))
+                    # print(f"Dataset doc dict: {d}, {s}")
                 else:
-                    #print(f"Get from memory: {d}, {s}")
+                    # print(f"Get from memory: {d}, {s}")
                     doc_dict = self.memory_index.get_doc_dict(int(d))
-                    #print(f"Memory doc dict: {d}, {s}")
+                    # print(f"Memory doc dict: {d}, {s}")
 
                 doc_dicts.append(doc_dict)
 
-        #print(f"Retrieved doc_dicts: {doc_dicts}")
+        # print(f"Retrieved doc_dicts: {doc_dicts}")
 
         joined_dicts = []
         for doc_chunks in chunked(doc_dicts, self.config.combined_n_docs):
@@ -278,9 +268,9 @@ class RagMemoryRetriever(RagRetriever):
             joined_doc_dict['embeddings'] = np.array([d['embeddings'] for d in doc_chunks])
             joined_dicts.append(joined_doc_dict)
 
-        #print(f"Joined doc_dicts: {len(joined_dicts)}, {joined_dicts}")
+        # print(f"Joined doc_dicts: {len(joined_dicts)}, {joined_dicts}")
 
-        #doc_dicts = self.index.get_doc_dicts(doc_ids)
+        # doc_dicts = self.index.get_doc_dicts(doc_ids)
         ##print(f"Original doc_dicts: {doc_dicts}")
 
         return retrieved_doc_embeds, doc_ids, joined_dicts
@@ -308,8 +298,6 @@ class RagMemoryRetriever(RagRetriever):
 
         def cat_input_and_doc(doc_title, doc_text, input_string, prefix):
 
-
-
             if doc_title.startswith('"'):
                 doc_title = doc_title[1:]
             if doc_title.endswith('"'):
@@ -327,7 +315,7 @@ class RagMemoryRetriever(RagRetriever):
 
             return out
 
-        #print(f"Indices {len(docs)}, {n_docs}, {len(input_strings)}, {len( docs[0]['title'])},  {docs[0]['text']}")
+        # print(f"Indices {len(docs)}, {n_docs}, {len(input_strings)}, {len( docs[0]['title'])},  {docs[0]['text']}")
         rag_input_strings = [
             cat_input_and_doc(
                 docs[i]["title"][j],
@@ -335,7 +323,7 @@ class RagMemoryRetriever(RagRetriever):
                 input_strings[i],
                 prefix,
             )
-            for i in range(min(len(docs),len(input_strings)))
+            for i in range(min(len(docs), len(input_strings)))
             for j in range(n_docs)
         ]
 
@@ -346,7 +334,7 @@ class RagMemoryRetriever(RagRetriever):
             padding="max_length",
             truncation=True,
         )
-        logger.info(f"Contextualised inputs: {torch.sum((contextualized_inputs['input_ids'] != 1), dim=-1)}, {contextualized_inputs['input_ids'].size()} ")
+        # logger.info(f"Contextualised inputs: {torch.sum((contextualized_inputs['input_ids'] != 1), dim=-1)}, {contextualized_inputs['input_ids'].size()} ")
 
         return contextualized_inputs["input_ids"], contextualized_inputs["attention_mask"]
 
@@ -393,12 +381,12 @@ class RagMemoryRetriever(RagRetriever):
         n_docs = n_docs if n_docs is not None else self.config.combined_n_docs
         prefix = prefix if prefix is not None else self.config.generator.prefix
 
-        #print(f"Question hidden states:", question_hidden_states.shape)
+        # print(f"Question hidden states:", question_hidden_states.shape)
         retrieved_doc_embeds, doc_ids, docs = self.retrieve(question_hidden_states, n_docs)
 
-        #print(f"Question input ids: {question_input_ids.size()}")
+        # print(f"Question input ids: {question_input_ids.size()}")
         input_strings = self.question_encoder_tokenizer.batch_decode(question_input_ids, skip_special_tokens=True)
-        #print(f"Input strings: {len(input_strings)}")
+        # print(f"Input strings: {len(input_strings)}")
         context_input_ids, context_attention_mask = self.postprocess_docs(
             docs, input_strings, prefix, n_docs, return_tensors=return_tensors
         )

@@ -14,9 +14,7 @@
 # limitations under the License.
 """ RAG model configuration """
 
-import copy
-
-from transformers import PretrainedConfig, AutoConfig, RagConfig
+from transformers import RagConfig
 
 
 class RagMemoryConfig(RagConfig):
@@ -24,41 +22,41 @@ class RagMemoryConfig(RagConfig):
     is_composition = True
 
     def __init__(
-        self,
-        vocab_size=None,
-        is_encoder_decoder=True,
-        prefix=None,
-        bos_token_id=None,
-        pad_token_id=None,
-        eos_token_id=None,
-        decoder_start_token_id=None,
-        title_sep=" / ",
-        doc_sep=" // ",
-        n_docs=5,
-        max_combined_length=300,
-        retrieval_vector_size=768,
-        retrieval_batch_size=8,
-        dataset="wiki_dpr",
-        dataset_split="train",
-        index_name="compressed",
-        index_path=None,
-        passages_path=None,
-        use_dummy_dataset=False,
-        reduce_loss=False,
-        label_smoothing=0.0,
-        do_deduplication=True,
-        exclude_bos_score=False,
-        do_marginalize=False,
-        output_retrieved=False,
-        use_dataset_retrieval=True,
-        use_memory_retrieval=True,
-        memory_n_docs: int = 5,
-        memory_capacity: int = 19000,
-        memory_buffer=1000,
-        memory_lru: bool = True,
-        combined_n_docs: int = 5,
-        context_encoder = "facebook/dpr-ctx_encoder-multiset-base",
-        **kwargs
+            self,
+            vocab_size=None,
+            is_encoder_decoder=True,
+            prefix=None,
+            bos_token_id=None,
+            pad_token_id=None,
+            eos_token_id=None,
+            decoder_start_token_id=None,
+            title_sep=" / ",
+            doc_sep=" // ",
+            n_docs=5,
+            max_combined_length=300,
+            retrieval_vector_size=768,
+            retrieval_batch_size=32,
+            dataset="wiki_dpr",
+            dataset_split="train",
+            index_name="compressed",
+            index_path=None,
+            passages_path=None,
+            use_dummy_dataset=False,
+            reduce_loss=False,
+            label_smoothing=0.0,
+            do_deduplication=True,
+            exclude_bos_score=False,
+            do_marginalize=False,
+            output_retrieved=False,
+            use_dataset_retrieval=True,
+            use_memory_retrieval=True,
+            memory_n_docs: int = 5,
+            memory_capacity: int = 19000,
+            memory_buffer=1000,
+            memory_lru: bool = True,
+            combined_n_docs: int = 5,
+            context_encoder="facebook/dpr-ctx_encoder-multiset-base",
+            **kwargs
     ):
         super().__init__(
             bos_token_id=bos_token_id,
