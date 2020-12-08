@@ -43,6 +43,7 @@ class SbertDiscFragmentsModel(Model):
     def forward(self,
                 text: TextFieldTensors,
                 labels: TextFieldTensors = None,
+                negative_labels: TextFieldTensors = None,
                 metadata: List[Dict[str, Any]] = None,
                 dataset: List[str] = None,
                 num_sequences_to_generate: int = 0,
@@ -52,25 +53,46 @@ class SbertDiscFragmentsModel(Model):
 
         input_ids = text["tokens"]['token_ids']
 
+        if negative_labels is not None:
+            negative_ids = negative_labels["tokens"]['token_ids']
+        else:
+            negative_ids = None
+
         if labels is not None:
             label_ids = labels["tokens"]['token_ids']
 
             examples = []
-            labels = []
 
             for input in input_ids:
                 examples.append(input)
 
             for label in label_ids:
-                labels.append(label)
+                examples.append(label)
+
+            if negative_ids is not None:
+                for neg_label in negative_ids:
+                    examples.append(neg_label)
 
             examples_tensor = pad_sequence(examples, batch_first=True, padding_value=0.0)
-            examples_tensor = pad_sequence(examples, batch_first=True, padding_value=0.0)
 
-            input_tensor, label_tensor = torch.split(examples_tensor, int(examples_tensor.size()[0] / 2), dim=0)
+
+            if negative_ids is not None:
+                input_tensor, label_tensor, neg_label_tensor = torch.split(examples_tensor, int(examples_tensor.size()[0] / 3), dim=0)
+            else:
+                input_tensor, label_tensor = torch.split(examples_tensor, int(examples_tensor.size()[0] / 2), dim=0)
+                neg_label_tensor = None
+
             input_tensor = input_tensor.unsqueeze(dim=1)
             label_tensor = label_tensor.unsqueeze(dim=1)
-            examples_tensor = torch.cat((input_tensor, label_tensor), dim=1)
+
+            if neg_label_tensor is not None:
+                neg_label_tensor = neg_label_tensor.unsqueeze(dim=1)
+
+            if neg_label_tensor is not None:
+                examples_tensor = torch.cat((input_tensor, label_tensor, neg_label_tensor), dim=1)
+            else:
+                examples_tensor = torch.cat((input_tensor, label_tensor), dim=1)
+
             examples_tensor = examples_tensor.permute(1, 0, 2)
 
             examples_mask_tensor = (examples_tensor != 0)

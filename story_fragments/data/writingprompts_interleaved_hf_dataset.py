@@ -99,6 +99,16 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  dummy=True,
                                                  version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_dummy_4_label_4_step_4",
+                                                 description="Writing Prompts dummy for testng purposes.",
+                                                 data_url=_URL,
+                                                 input_size=4,
+                                                 target_size=4,
+                                                 step_size=4,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 dummy=True,
+                                                 version=_VERSION),
         WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_1_label_1_step_1",
                                                  description="Writing Prompts with one sentence of context, "
                                                              "labels and a one sentence step.",
@@ -110,6 +120,15 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  description="Writing Prompts with 4 sentence steps.",
                                                  input_size=4,
                                                  target_size=1,
+                                                 step_size=4,
+                                                 data_url=_URL,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_4_label_4_step_4",
+                                                 description="Writing Prompts with 4 sentence steps.",
+                                                 input_size=4,
+                                                 target_size=4,
                                                  step_size=4,
                                                  data_url=_URL,
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
@@ -141,6 +160,7 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                     "title": datasets.Value("string"),  # The title of the work, or for WP the prompt.
                     "text": datasets.Value("string"),  # The context input_text field.
                     "label": datasets.Value("string"),  # The input_text to predict.
+                    "negative_labels": [datasets.Value("string")],  # The input_text to predict.
                     "episode_done": datasets.Value("bool"),  # True for the last passage in an episode.
                     "episode_begun": datasets.Value("bool")  # True for the first passage in an episode.
 

@@ -1,6 +1,7 @@
 import logging
 import os
-from random import random, randint
+import random
+from random import  randint
 from typing import Dict, Iterable
 
 from allennlp.data import DatasetReader, Instance
@@ -69,6 +70,19 @@ class WritingPromptsInterleavedReader(DatasetReader):
             target_tokens = self.generator_tokenizer.tokenize(example['label'])
 
             fields['labels'] = TextField(target_tokens, self.generator_indexers)
+
+        if "negative_labels" in example:
+            negative_labels = example["negative_labels"]
+            if len(negative_labels) > 1:
+                negative_label = random.choice(negative_labels)
+            elif len(negative_labels) > 0:
+                negative_label = negative_labels[0]
+            else:
+                negative_label = "<BLANK>"
+
+            if negative_label is not None:
+                negative_label_tokens = self.generator_tokenizer.tokenize(negative_label)
+                fields['negative_labels'] = TextField(negative_label_tokens, self.generator_indexers)
 
         return Instance(fields)
 

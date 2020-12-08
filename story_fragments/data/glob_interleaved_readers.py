@@ -80,6 +80,19 @@ class GlobCorpusInterleavedReader(DatasetReader):
 
             fields['labels'] = TextField(target_tokens, self.generator_indexers)
 
+        if "negative_labels" in example:
+            negative_labels = example["negative_labels"]
+            if len(negative_labels) > 1:
+                negative_label = random.choice(negative_labels)
+            elif len(negative_labels) > 0:
+                negative_label = negative_labels[0]
+            else:
+                negative_label = "<BLANK>"
+
+            if negative_label is not None:
+                negative_label_tokens = self.generator_tokenizer.tokenize(negative_label)
+                fields['negative_labels'] = TextField(negative_label_tokens, self.generator_indexers)
+
         return Instance(fields)
 
     def _read(self, file_path: str) -> Iterable[Instance]:

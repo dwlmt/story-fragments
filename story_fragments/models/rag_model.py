@@ -100,6 +100,7 @@ class RagFragmentsModel(Model):
     def forward(self,
                 text: TextFieldTensors,
                 labels: TextFieldTensors = None,
+                negative_labels: TextFieldTensors = None,
                 metadata: List[Dict[str, Any]] = None,
                 dataset: List[str] = None,
                 num_sequences_to_generate: int = 0,

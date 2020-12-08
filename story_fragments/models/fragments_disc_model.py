@@ -120,6 +120,7 @@ class DiscFragmentsModel(Model):
     def forward(self,
                 text: TextFieldTensors,
                 labels: TextFieldTensors = None,
+                negative_labels: TextFieldTensors = None,
                 metadata: List[Dict[str, Any]] = None,
                 dataset: List[str] = None,
                 num_sequences_to_generate: int = 0,
@@ -133,6 +134,11 @@ class DiscFragmentsModel(Model):
         input_mask = (input_ids != 0)
         input_dict = {"input_ids": input_ids, "attention_mask": input_mask}
         context_output = self.context_model(input_dict)["sentence_embedding"]
+
+        if negative_labels is not None:
+            negative_ids = negative_labels["tokens"]['token_ids']
+        else:
+            negative_ids = None
 
         if self.retriever is not None and self.config.combined_n_docs > 0:
             input_text = self.tokenizer.batch_decode(input_ids, skip_special_tokens=True,
@@ -150,23 +156,24 @@ class DiscFragmentsModel(Model):
 
             retriever_outputs = self.retriever.retrieve(
                 question_encoder_last_hidden_state.cpu().detach().float().numpy(), self.config.combined_n_docs)
-            print(f"Retrieved docs: {retriever_outputs}")
+
+            #print(f"Retrieved docs: {retriever_outputs}")
 
             retrieved_doc_embeds, retrieved_doc_ids, retrieved_doc_text = retriever_outputs
 
-            print(f"Retreived doc text: {retrieved_doc_text}")
+            #print(f"Retreived doc text: {retrieved_doc_text}")
             extracted_doc_texts = [t['text'] for t in retrieved_doc_text]
             extracted_doc_texts_flattened = []
             for ext in extracted_doc_texts:
                 extracted_doc_texts_flattened.extend(ext)
 
 
-            print(f"Extracted text: {extracted_doc_texts_flattened}")
+            #print(f"Extracted text: {extracted_doc_texts_flattened}")
             retrieved_encoded_text_ids = self.tokenizer.batch_encode_plus(extracted_doc_texts_flattened, return_tensors='pt',
                                                                     padding=True,
                                                                     truncation=True)
 
-            print(f"Encoded text ids: {retrieved_encoded_text_ids}")
+            #print(f"Encoded text ids: {retrieved_encoded_text_ids}")
             encoded_retrieved_contexts = self.context_model({"input_ids": retrieved_encoded_text_ids["input_ids"].to(question_encoder_last_hidden_state.device),
                                                  "attention_mask": retrieved_encoded_text_ids["attention_mask"].to(question_encoder_last_hidden_state.device)})[
                 "sentence_embedding"]
@@ -187,10 +194,10 @@ class DiscFragmentsModel(Model):
 
             doc_probs = F.softmax(doc_scores, dim=-1)
             doc_probs_exp = (torch.unsqueeze(doc_probs, dim=2)).expand_as(encoded_retrieved_contexts)
-            print(f"Pre agg: {doc_probs_exp}, {doc_probs_exp.size()}, {retrieved_doc_embeds}, {retrieved_doc_embeds.size()}")
+            #print(f"Pre agg: {doc_probs_exp}, {doc_probs_exp.size()}, {retrieved_doc_embeds}, {retrieved_doc_embeds.size()}")
 
             agg_vector = torch.sum((doc_probs_exp * encoded_retrieved_contexts), dim=-2)
-            print(f"Agg vector: {context_output}, {context_output.size()},{agg_vector}, {agg_vector.size()}")
+            #print(f"Agg vector: {context_output}, {context_output.size()},{agg_vector}, {agg_vector.size()}")
 
             context_output = (context_output * (1.0 - self.reference_embedding_weight)) + (
                     agg_vector * self.reference_embedding_weight)
@@ -216,18 +223,25 @@ class DiscFragmentsModel(Model):
                 self.retriever.add(context_dicts=input_text_list, context_hidden_states=context_embeddings)
 
         if labels is not None:
+
             label_ids = labels["tokens"]['token_ids']
-
             label_mask = (label_ids != 0)
-
             label_dict = {"input_ids": label_ids, "attention_mask": label_mask}
-
             label_output = self.target_model(label_dict)["sentence_embedding"]
+
+            if negative_ids is not None:
+                neg_label_mask = (negative_ids != 0)
+                neg_label_dict = {"input_ids": negative_ids, "attention_mask": neg_label_mask}
+                neg_label_output = self.target_model(neg_label_dict)["sentence_embedding"]
+            else:
+                neg_label_output = None
 
             # #print(f"Examples list: {examples_list}"
 
             # print(f"Representations: {context_output}, {label_output}, {context_output.size()}, {label_output.size()}")
 
+            if neg_label_output is not None:
+                torch.cat((label_output, neg_label_output))
             scores = torch.mm(context_output, label_output.transpose(0, 1))
 
             scores[torch.isnan(scores)] = 0.0

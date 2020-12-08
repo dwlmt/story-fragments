@@ -26,6 +26,7 @@ class DeepspeedConfig(FromParams):
             amp: JsonDict = {'enabled': False},
             zero_optimization: Union[bool, Dict] = False,
             activation_checkpointing:  Union[Dict] = {'partition_activations': False},
+            scheduler: Union[Dict] = {},
             zero_allow_untested_optimizer: bool = True,
             gradient_clipping: float = 1.0,
             fp32_allreduce: bool = True,
@@ -38,6 +39,7 @@ class DeepspeedConfig(FromParams):
         self.amp = amp
         self.zero_optimization = zero_optimization
         self.activation_checkpointing = activation_checkpointing
+        self.scheduler = scheduler
         self.zero_allow_untested_optimizer = zero_allow_untested_optimizer
         self.gradient_clipping = gradient_clipping
         self.fp32_allreduce = fp32_allreduce
