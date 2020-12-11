@@ -6,41 +6,41 @@
         "type": "moviecorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": true
       },
       "schmoop-interleaved": {
         "type": "schmoop-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": true
       },
       "bookcorpus-interleaved": {
         "type": "bookcorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": true
       },
       "writingprompts-interleaved": {
         "type": "writingprompts-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": true
       },
       "wikiplots-interleaved": {
         "type": "wikiplots-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": true
       }
     }
   },
-  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_1_step_4/train\", \"schmoop-interleaved\": \"schmoop_context_4_label_1_step_4/train\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_1_step_4/train\", \"wikiplots-interleaved\": \"wikiplots_context_4_label_1_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_context_4_label_1_step_4/train\"}",
-  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_1_step_4/validation\", \"schmoop-interleaved\": \"schmoop_context_4_label_1_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_1_step_4/validation\", \"wikiplots-interleaved\": \"wikiplots_context_4_label_1_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_context_4_label_1_step_4/validation\"}",
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_4_step_4/train\", \"schmoop-interleaved\": \"schmoop_context_4_label_4_step_4/train\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_4_step_4/train\", \"wikiplots-interleaved\": \"wikiplots_context_4_label_4_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_context_4_label_4_step_4/train\"}",
+  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_4_step_4/validation\", \"schmoop-interleaved\": \"schmoop_context_4_label_4_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_4_step_4/validation\", \"wikiplots-interleaved\": \"wikiplots_context_4_label_4_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_context_4_label_4_step_4/validation\"}",
   "data_loader": {
     "batch_size": 8,
     "batches_per_epoch": 10000
@@ -59,7 +59,7 @@
     "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
     "gradient_checkpointing": true,
     "ndocs": 5,
-    "max_combined_length": 512,
+    "max_combined_length": 320,
     "use_memory_retrieval": true
   },
    "trainer": {
@@ -90,8 +90,8 @@
         "allgather_partitions": true,
         "overlap_comm": true,
         "reduce_scatter": true,
-        "reduce_bucket_size": 25000000,
-        "allgather_bucket_size": 25000000,
+        "reduce_bucket_size": 15000000,
+        "allgather_bucket_size": 15000000,
         "contiguous_gradients" : true,
         "cpu_offload": true
       },

@@ -1,52 +1,53 @@
 {
   "dataset_reader": {
-    "type": "interleaving",
+    "type": "interleaving-batch",
+    "batch_size": 16,
     "readers": {
       "moviecorpus-interleaved": {
         "type": "moviecorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": false
       },
       "schmoop-interleaved": {
         "type": "schmoop-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": false
       },
       "bookcorpus-interleaved": {
         "type": "bookcorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": false
       },
       "writingprompts-interleaved": {
         "type": "writingprompts-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": false
       },
       "wikiplots-interleaved": {
         "type": "wikiplots-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 256,
+        "encoder_max_length": 192,
         "lazy": false
       }
     }
   },
-  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_4_label_1_step_4/train\", \"schmoop-interleaved\": \"schmoop_dummy_4_label_1_step_4/train\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_4_label_1_step_4/train\", \"wikiplots-interleaved\": \"wikiplots_dummy_4_label_1_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/train\"}",
-  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_4_label_1_step_4/validation\", \"schmoop-interleaved\": \"schmoop_dummy_4_label_1_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_4_label_1_step_4/validation\", \"wikiplots-interleaved\": \"wikiplots_dummy_4_label_1_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_1_step_4/validation\"}",
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_4_label_4_step_4/train\", \"schmoop-interleaved\": \"schmoop_dummy_4_label_4_step_4/train\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_4_label_4_step_4/train\", \"wikiplots-interleaved\": \"wikiplots_dummy_4_label_4_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_4_step_4/train\"}",
+  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_4_label_4_step_4/validation\", \"schmoop-interleaved\": \"schmoop_dummy_4_label_4_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_4_label_4_step_4/validation\", \"wikiplots-interleaved\": \"wikiplots_dummy_4_label_4_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_4_step_4/validation\"}",
   "data_loader": {
-    "batch_size": 16,
+    "batch_size": 4,
     "batches_per_epoch": 1000
   },
   "validation_data_loader": {
-    "batch_size": 16,
+    "batch_size": 4,
     "batches_per_epoch": 100
   },
   "model": {
@@ -55,11 +56,11 @@
     "generator_name": "facebook/bart-large",
     "retriever_name": "facebook/rag-token-nq",
     "index_name": "custom",
-    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
-    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
+    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_compressed",
+    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_compressed.faiss",
     "gradient_checkpointing": true,
     "ndocs": 5,
-    "max_combined_length": 512,
+    "max_combined_length": 320,
     "use_memory_retrieval": true
   },
   "trainer": {
@@ -67,13 +68,13 @@
     "use_amp": false,
     "optimizer": {
       "type": "adam",
-        "lr": 1e-05,
+        "lr": 3e-06,
         "eps": 1e-06
     },
     "deepspeed_config": {
       "optimizer": {
         "params": {
-          "lr": 1e-05,
+          "lr": 3e-06,
           "eps": 1e-06
         },
         "type": "Adam"
@@ -88,10 +89,10 @@
       "zero_optimization": {
         "stage": 2,
         "allgather_partitions": true,
-        "allgather_bucket_size": 100000000,
         "overlap_comm": true,
         "reduce_scatter": true,
-        "reduce_bucket_size": 100000000,
+        "reduce_bucket_size": 15000000,
+        "allgather_bucket_size": 15000000,
         "contiguous_gradients" : true,
         "cpu_offload": true
       },
@@ -99,7 +100,7 @@
     },
     "num_epochs": 5,
     "patience": 2,
-    "num_gradient_accumulation_steps": 8,
+    "num_gradient_accumulation_steps": 1,
     "checkpointer": {
       "num_serialized_models_to_keep": 1
     }
