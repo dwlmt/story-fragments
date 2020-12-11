@@ -146,6 +146,16 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_url=_URL,
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_4_label_4_step_4_neg",
+                                                 description="Writing Prompts with 4 sentence steps.",
+                                                 input_size=4,
+                                                 target_size=4,
+                                                 step_size=4,
+                                                 add_negative_examples=True,
+                                                 data_url=_URL,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  version=_VERSION)
 
     ]
