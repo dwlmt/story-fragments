@@ -47,8 +47,9 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  input_size: int = 1,
                  target_size: int = 1,
                  step_size: int = 1,
-                 batch_size: int = 60,
+                 batch_size: int = 32,
                  dummy: bool = False,
+                 add_negative_examples: bool = False,
                  **kwargs):
         """ Generic config for reading a dataset in a interleaved or round robin fashion.
 
@@ -71,6 +72,7 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
         self.step_size = step_size
         self.batch_size = batch_size
         self.dummy = dummy
+        self.add_negative_examples = add_negative_examples
 
         super(WritingPromptsInterleavedHfDatasetConfig, self).__init__(**kwargs)
 
@@ -108,6 +110,17 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  dummy=True,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_dummy_4_label_4_step_4_neg",
+                                                 description="Writing Prompts dummy for testng purposes.",
+                                                 data_url=_URL,
+                                                 input_size=4,
+                                                 target_size=4,
+                                                 step_size=4,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 dummy=True,
+                                                 add_negative_examples=True,
                                                  version=_VERSION),
         WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_1_label_1_step_1",
                                                  description="Writing Prompts with one sentence of context, "
@@ -173,6 +186,7 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
             citation=_CITATION,
         )
 
+
     def _split_generators(self, dl_manager):
         """Returns splits from train,valid,test.jsonl """
 
@@ -213,5 +227,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                self.config.target_size,
                                                self.config.step_size,
                                                dummy=self.config.dummy,
-                                               contractions=True):
+                                               contractions=True,
+                                               add_negative_examples=self.config.add_negative_examples):
                 yield example['id'], example

@@ -32,8 +32,9 @@ class WikiPlotsInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  input_size: int = 1,
                  target_size: int = 1,
                  step_size: int = 1,
-                 batch_size: int = 60,
+                 batch_size: int = 32,
                  dummy: bool = False,
+                 add_negative_examples: bool = False,
                  **kwargs):
         """ Generic config for reading a dataset in a interleaved or round robin fashion.
 
@@ -55,6 +56,7 @@ class WikiPlotsInterleavedHfDatasetConfig(datasets.BuilderConfig):
         self.step_size = step_size
         self.batch_size = batch_size
         self.dummy = dummy
+        self.add_negative_examples =  add_negative_examples
 
         super(WikiPlotsInterleavedHfDatasetConfig, self).__init__(**kwargs)
 
@@ -136,6 +138,7 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                     "title": datasets.Value("string"),  # The title of the work.
                     "text": datasets.Value("string"),  # The context input_text field.
                     "label": datasets.Value("string"),  # The input_text to predict.
+                    "negative_labels": [datasets.Value("string")],  # The input_text to predict.
                     "episode_done": datasets.Value("bool"),  # True for the last passage in an episode.
                     "episode_begun": datasets.Value("bool")  # True for the first passage in an episode.
 
@@ -173,5 +176,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
             for example in interleave_examples(reader, self.config.batch_size, self.config.input_size,
                                                self.config.target_size,
                                                self.config.step_size,
-                                               dummy=self.config.dummy):
+                                               dummy=self.config.dummy,
+                                               add_negative_examples=self.config.add_negative_examples):
                 yield example['id'], example

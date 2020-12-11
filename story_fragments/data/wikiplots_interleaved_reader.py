@@ -1,5 +1,7 @@
 import os
-from random import random, randint
+
+import random
+from random import randint
 from typing import Dict, Iterable
 
 from allennlp.data import DatasetReader, Instance
@@ -134,7 +136,7 @@ class WikiplotsInterleavedReader(DatasetReader):
         if self.manual_shards > 1:
             total_num_examples = len(dataset)
             shard_size = int(total_num_examples / self.manual_shards)
-            shard = randint(0, self.manual_shards - 1)
+            shard = random.Random().randint(0, self.manual_shards - 1)
             start = shard * shard_size
             finish = min(start + shard_size, total_num_examples - 1)
             index_range = [r for r in range(start, finish + 1)]

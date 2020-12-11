@@ -60,6 +60,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
         fields = {}
 
         fields["metadata"] = MetadataField(example)
+        #logger.info(f"Example: {example}")
 
         tokens = self.encoder_tokenizer.tokenize(example['text'])
 
@@ -116,7 +117,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
         if self.manual_shards > 1:
             total_num_examples = len(dataset)
             shard_size = int(total_num_examples / self.manual_shards)
-            shard = randint(0, self.manual_shards - 1)
+            shard = random.Random().randint(0, self.manual_shards - 1)
             start = shard * shard_size
             finish = min(start + shard_size, total_num_examples - 1)
             index_range = [r for r in range(start, finish + 1)]

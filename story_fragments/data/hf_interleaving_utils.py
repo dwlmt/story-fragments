@@ -1,21 +1,59 @@
+import copy
 import random
 import re
 from collections import deque
 
 import more_itertools
+import textattack
 from blingfire import text_to_sentences
 from datasets import logger
+from nltk.corpus import wordnet
+from textattack.augmentation import Augmenter
+from textattack.constraints.pre_transformation import StopwordModification, RepeatModification
+from textattack.transformations import CompositeTransformation, WordSwapRandomCharacterDeletion, WordSwapQWERTY, \
+    WordSwapWordNet, WordSwap, RandomSwap
 
 from story_fragments.data.contraction_utils import CONTRACTIONS_LIST
 
-
 _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
+
+class WordSwapAntonymWordNet(WordSwap):
+    """Transforms an input by replacing its words with antonyms provided by
+    WordNet."""
+
+    def __init__(self, language="eng"):
+        if language not in wordnet.langs():
+            raise ValueError(f"Language {language} not one of {wordnet.langs()}")
+        self.language = language
+
+    def _get_replacement_words(self, word, random=False):
+        """Returns a list containing all possible words with 1 character
+        replaced by a homoglyph."""
+        antonyms = set()
+        for syn in wordnet.synsets(word, lang=self.language):
+            for syn_word in syn.lemmas():
+                if (
+                    (syn_word.name() != word)
+                    and ("_" not in syn_word.name())
+                    and (textattack.shared.utils.is_one_word(syn_word.name()))
+                ):
+                    # WordNet can suggest phrases that are joined by '_' but we ignore phrases.
+                    if syn_word.antonyms():
+                        antonyms.add(syn_word.antonyms()[0].name())
+        return list(antonyms)
+
+constraints = [RepeatModification(), StopwordModification()]
+# Create augmenter with specified parameters
+antonym_augmenter = Augmenter(transformation=WordSwapAntonymWordNet(), constraints=constraints, pct_words_to_swap=0.15, transformations_per_example=2)
+random_swap_augmenter = Augmenter(transformation=RandomSwap(), pct_words_to_swap=0.10, transformations_per_example=2)
+
 
 def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
                         label_size: int = 1, step_size: int = 1,
                         dummy: bool = False,
                         dummy_max_examples: int = 10000,
-                        contractions=False):
+                        contractions: bool= False,
+                        add_negative_examples: bool = False):
     """ Interleaves epsiodes examples, processes and returns as as dict.
 
     Args:
@@ -70,25 +108,40 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
             else:
                 id = f"{id}"
 
-            # Get neighbouring negative examples.
+            # Get neighbouring negative examples. TODO: Make window configurable.
             negative_labels = []
-            if i > 0:
-                prev_list = windowed_sentences[max(0, i - 10): i]
-                #print(f"{prev_list}")
-                if len(prev_list) > 1:
-                    example = random.choice(prev_list)
-                    #print(f"{example}")
-                    neg_label_text = example[-label_size:]
-                    negative_labels.append(" ".join(neg_label_text))
 
-            if i < len(windowed_sentences) - 1:
-                fut_list = windowed_sentences[i + 1: min(len(windowed_sentences), i + 11)]
-                if len(fut_list) > 1:
-                    #print(f"{fut_list}")
-                    example = random.choice(fut_list)
-                    #print(f"{example}")
-                    neg_label_text = example[-label_size:]
-                    negative_labels.append(" ".join(neg_label_text))
+            if add_negative_examples:
+                if i > 0:
+                    prev_list = windowed_sentences[max(0, i - 10): i]
+                    #print(f"{prev_list}")
+                    if len(prev_list) > 1:
+                        example = random.choice(prev_list)
+                        #print(f"{example}")
+                        neg_label_text = example[-label_size:]
+                        negative_labels.append(" ".join(neg_label_text))
+
+                if i < len(windowed_sentences) - 1:
+                    fut_list = windowed_sentences[i + 1: min(len(windowed_sentences), i + 11)]
+                    if len(fut_list) > 1:
+                        #print(f"{fut_list}")
+                        example = random.choice(fut_list)
+                        #print(f"{example}")
+                        neg_label_text = example[-label_size:]
+                        negative_labels.append(" ".join(neg_label_text))
+
+                if step_size > 1:
+                    #print(f"{label_text}")
+                    shuffled_text = list(copy.deepcopy(label_text))
+                    random.shuffle(shuffled_text)
+                    negative_labels.append(" ".join(shuffled_text))
+
+                antonym_negs = antonym_augmenter.augment(" ".join(label_text))
+                negative_labels.extend(antonym_negs)
+
+                random_swap_negs = random_swap_augmenter.augment(" ".join(label_text))
+                negative_labels.extend(random_swap_negs)
+                #print(f"Antonym: {label_text}, --- {antonym_negs}")
 
             example = {
                 "id": f"{id}-{i}",
@@ -101,7 +154,7 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
                 "episode_done": False if i < len(windowed_sentences) - 1 else True,
                 "episode_begun": True if i == 0 else False
             }
-
+         
             example_list.append(example)
 
         return example_list

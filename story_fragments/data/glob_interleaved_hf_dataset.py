@@ -55,9 +55,10 @@ class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  input_size: int = 1,
                  target_size: int = 1,
                  step_size: int = 1,
-                 batch_size: int = 60,
+                 batch_size: int = 32,
                  dummy: bool = False,
                  shuffle: bool = True,
+                 add_negative_examples: bool = False,
                  **kwargs):
         """ Generic config for reading a dataset in a interleaved or round robin fashion.
 
@@ -79,7 +80,8 @@ class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
         self.step_size = step_size
         self.batch_size = batch_size
         self.dummy = dummy
-        self.shuffle = True
+        self.shuffle = shuffle
+        self.add_negative_examples = add_negative_examples
 
         super(GlobInterleavedHfDatasetConfig, self).__init__(**kwargs)
 
@@ -98,10 +100,19 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        step_size=4,
                                        dummy=True,
                                        version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="bookcorpus_dummy_4_label_4_step_4",
+                                       description="Writing Prompts with 4 sentence steps.",
+                                       input_size=4,
+                                       target_size=4,
+                                       step_size=4,
+                                       data_url=_BOOK_CORPUS_URL,
+                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
+                                       version=_VERSION,
+                                       dummy=True),
         GlobInterleavedHfDatasetConfig(name="bookcorpus_context_4_label_1_step_4",
                                        description="Writing Prompts with 4 sentence steps.",
                                        input_size=4,
-                                       target_size=1,
+                                       target_size=4,
                                        step_size=4,
                                        data_url=_BOOK_CORPUS_URL,
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
@@ -120,6 +131,16 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
                                        input_size=4,
                                        target_size=1,
+                                       step_size=4,
+                                       shuffle=False,
+                                       dummy=True,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="schmoop_dummy_4_label_4_step_4",
+                                       description="Schmoop dummy for testing purposes.",
+                                       data_url=_BOOK_CORPUS_URL,
+                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
+                                       input_size=4,
+                                       target_size=4,
                                        step_size=4,
                                        shuffle=False,
                                        dummy=True,
@@ -148,6 +169,15 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        glob_path=_MOVIE_CORPUS_GLOB_PATH,
                                        input_size=4,
                                        target_size=1,
+                                       step_size=4,
+                                       dummy=True,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="moviecorpus_dummy_4_label_4_step_4",
+                                       description="Movie script dummy for testing purposes.",
+                                       data_url=_MOVIE_CORPUS_URL,
+                                       glob_path=_MOVIE_CORPUS_GLOB_PATH,
+                                       input_size=4,
+                                       target_size=4,
                                        step_size=4,
                                        dummy=True,
                                        version=_VERSION),
@@ -183,6 +213,7 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                     "title": datasets.Value("string"),  # The title of the work, or for WP the prompt.
                     "text": datasets.Value("string"),  # The context input_text field.
                     "label": datasets.Value("string"),  # The input_text to predict.
+                    "negative_labels": [datasets.Value("string")],  # The input_text to predict.
                     "episode_done": datasets.Value("bool"),  # True for the last passage in an episode.
                     "episode_begun": datasets.Value("bool")  # True for the first passage in an episode.
 
@@ -225,5 +256,6 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                            self.config.input_size,
                                            self.config.target_size,
                                            self.config.step_size,
-                                           dummy=self.config.dummy):
+                                           dummy=self.config.dummy,
+                                           add_negative_examples=self.config.add_negative_examples):
             yield example['id'], example
