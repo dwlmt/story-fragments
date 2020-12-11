@@ -28,6 +28,38 @@ from story_fragments.modules.memory_cache_index import MemoryIndex
 
 logger = logging.get_logger(__name__)
 
+class CustomMemoryHFIndex(CanonicalHFIndex):
+    """
+    A wrapper around an instance of :class:`~datasets.Datasets`.
+    The dataset and the index are both loaded from the indicated paths on disk.
+
+    Args:
+        vector_size (:obj:`int`): the dimension of the passages embeddings used by the index
+        dataset_path (:obj:`str`):
+            The path to the serialized dataset on disk.
+            The dataset should have 3 columns: title (str), text (str) and embeddings (arrays of dimension vector_size)
+        index_path (:obj:`str`)
+            The path to the serialized faiss index on disk.
+    """
+
+    def __init__(self, vector_size: int, dataset, index_path=None):
+        super().__init__(vector_size, dataset, index_path=index_path)
+
+    def get_doc_dicts(self, doc_ids: np.ndarray) -> List[dict]:
+        return [self.dataset[doc_ids[i].tolist()] for i in range(doc_ids.shape[0])]
+
+    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs=5) -> Tuple[np.ndarray, np.ndarray]:
+        distances, ids = self.dataset.search_batch("embeddings", question_hidden_states, n_docs)
+        docs = [self.dataset[[i for i in indices if i >= 0]] for indices in ids]
+        vectors = [doc["embeddings"] for doc in docs]
+        for i in range(len(vectors)):
+            if len(vectors[i]) < n_docs:
+                vectors[i] = np.vstack([vectors[i], np.zeros((n_docs - len(vectors[i]), self.vector_size))])
+        return np.array(ids), np.array(vectors), distances  # shapes (batch_size, n_docs) and (batch_size, n_docs, d)
+
+    def get_doc_dict(self, doc_id: int):
+
+        return self.dataset[doc_id]
 
 class CustomMemoryHFIndex(CustomHFIndex):
     """
@@ -296,7 +328,7 @@ class RagMemoryRetriever(RagRetriever):
 
         _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
-        def cat_input_and_doc(doc_title, doc_text, input_string, prefix):
+        def cat_input_and_doc(doc_title, doc_text, input_string, prefix, skip_title=True):
 
             if doc_title.startswith('"'):
                 doc_title = doc_title[1:]
@@ -308,9 +340,14 @@ class RagMemoryRetriever(RagRetriever):
             if id_end != -1:
                 doc_title = doc_title[id_end:]
 
+            title_sep = self.config.title_sep
+            if skip_title:
+                doc_title = ""
+                title_sep = ""
+                
             if prefix is None:
                 prefix = ""
-            out = (f"{prefix} {doc_title} {self.config.title_sep} {doc_text} {self.config.doc_sep} {input_string}")
+            out = (f"{prefix} {doc_title} {title_sep} {doc_text} {self.config.doc_sep} {input_string}")
             out = _RE_COMBINE_WHITESPACE.sub(" ", out).strip()
 
             return out

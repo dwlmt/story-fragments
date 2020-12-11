@@ -8,6 +8,7 @@ from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
 from allennlp.training.metrics import CategoricalAccuracy
 from sentence_transformers import SentenceTransformer, models
+from sentence_transformers.util import pytorch_cos_sim
 from torch.nn import CrossEntropyLoss
 from transformers import AutoTokenizer, BertTokenizer
 from transformers import DPRContextEncoder
@@ -242,7 +243,7 @@ class DiscFragmentsModel(Model):
 
             if neg_label_output is not None:
                 torch.cat((label_output, neg_label_output))
-            scores = torch.mm(context_output, label_output.transpose(0, 1))
+            scores =  pytorch_cos_sim(context_output,label_output) * 20 #torch.mm(context_output, label_output.transpose(0, 1))
 
             scores[torch.isnan(scores)] = 0.0
 
