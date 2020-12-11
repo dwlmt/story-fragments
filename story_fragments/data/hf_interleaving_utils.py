@@ -11,9 +11,13 @@ from nltk.corpus import wordnet
 from textattack.augmentation import Augmenter
 from textattack.constraints.pre_transformation import StopwordModification, RepeatModification
 from textattack.transformations import CompositeTransformation, WordSwapRandomCharacterDeletion, WordSwapQWERTY, \
-    WordSwapWordNet, WordSwap, RandomSwap
+    WordSwapWordNet, WordSwap, RandomSwap, WordDeletion, WordInsertion
 
 from story_fragments.data.contraction_utils import CONTRACTIONS_LIST
+
+TRANSFORMATIONS_PER_EXAMPLE = 2
+
+PCT_WORDS_TO_SWAP = 0.15
 
 _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
@@ -44,8 +48,9 @@ class WordSwapAntonymWordNet(WordSwap):
 
 constraints = [RepeatModification(), StopwordModification()]
 # Create augmenter with specified parameters
-antonym_augmenter = Augmenter(transformation=WordSwapAntonymWordNet(), constraints=constraints, pct_words_to_swap=0.15, transformations_per_example=2)
-random_swap_augmenter = Augmenter(transformation=RandomSwap(), pct_words_to_swap=0.10, transformations_per_example=2)
+antonym_augmenter = Augmenter(transformation=WordSwapAntonymWordNet(), constraints=constraints, pct_words_to_swap=PCT_WORDS_TO_SWAP, transformations_per_example=TRANSFORMATIONS_PER_EXAMPLE)
+random_swap_augmenter = Augmenter(transformation=RandomSwap(), pct_words_to_swap=PCT_WORDS_TO_SWAP, transformations_per_example=TRANSFORMATIONS_PER_EXAMPLE)
+deletion_augmenter = Augmenter(transformation=WordDeletion(), pct_words_to_swap=PCT_WORDS_TO_SWAP, transformations_per_example=TRANSFORMATIONS_PER_EXAMPLE)
 
 
 def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
@@ -112,36 +117,52 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
             negative_labels = []
 
             if add_negative_examples:
-                if i > 0:
-                    prev_list = windowed_sentences[max(0, i - 10): i]
-                    #print(f"{prev_list}")
-                    if len(prev_list) > 1:
-                        example = random.choice(prev_list)
-                        #print(f"{example}")
-                        neg_label_text = example[-label_size:]
-                        negative_labels.append(" ".join(neg_label_text))
 
-                if i < len(windowed_sentences) - 1:
-                    fut_list = windowed_sentences[i + 1: min(len(windowed_sentences), i + 11)]
-                    if len(fut_list) > 1:
-                        #print(f"{fut_list}")
-                        example = random.choice(fut_list)
-                        #print(f"{example}")
-                        neg_label_text = example[-label_size:]
-                        negative_labels.append(" ".join(neg_label_text))
+                c = random.randint(1, 100)
 
-                if step_size > 1:
-                    #print(f"{label_text}")
-                    shuffled_text = list(copy.deepcopy(label_text))
-                    random.shuffle(shuffled_text)
-                    negative_labels.append(" ".join(shuffled_text))
+                if c < 40:
 
-                antonym_negs = antonym_augmenter.augment(" ".join(label_text))
-                negative_labels.extend(antonym_negs)
+                    if i > 0:
+                        prev_list = windowed_sentences[max(0, i - 10): i]
+                        #print(f"{prev_list}")
+                        if len(prev_list) > 1:
+                            example = random.choice(prev_list)
+                            #print(f"{example}")
+                            neg_label_text = example[-label_size:]
+                            negative_labels.append(" ".join(neg_label_text))
 
-                random_swap_negs = random_swap_augmenter.augment(" ".join(label_text))
-                negative_labels.extend(random_swap_negs)
-                #print(f"Antonym: {label_text}, --- {antonym_negs}")
+                    if i < len(windowed_sentences) - 1:
+                        fut_list = windowed_sentences[i + 1: min(len(windowed_sentences), i + 11)]
+                        if len(fut_list) > 1:
+                            #print(f"{fut_list}")
+                            example = random.choice(fut_list)
+                            #print(f"{example}")
+                            neg_label_text = example[-label_size:]
+                            negative_labels.append(" ".join(neg_label_text))
+
+                elif c < 60:
+
+                    if step_size > 1:
+                        #print(f"{label_text}")
+                        shuffled_text = list(copy.deepcopy(label_text))
+                        random.shuffle(shuffled_text)
+                        negative_labels.append(" ".join(shuffled_text))
+
+                elif c < 75:
+
+                    antonym_negs = antonym_augmenter.augment(" ".join(label_text))
+                    negative_labels.extend(antonym_negs)
+
+                elif c < 90:
+
+                    random_swap_negs = random_swap_augmenter.augment(" ".join(label_text))
+                    negative_labels.extend(random_swap_negs)
+                    #print(f"Antonym: {label_text}, --- {antonym_negs}")
+
+                else:
+
+                    deletion_negs = deletion_augmenter.augment(" ".join(label_text))
+                    negative_labels.extend(deletion_negs)
 
             example = {
                 "id": f"{id}-{i}",
