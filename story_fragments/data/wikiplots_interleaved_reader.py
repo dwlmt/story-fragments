@@ -28,7 +28,9 @@ class WikiplotsInterleavedReader(DatasetReader):
                  train_split: int = 80,
                  validation_split: int = 10,
                  test_split: int = 10,
-                 manual_shards: int = 10,
+                 search_negative_labels: bool = False,
+                 k_nearest: int = 10,
+                 manual_shards: int = 1,
                  lazy: bool = True):
         """
 
@@ -68,7 +70,11 @@ class WikiplotsInterleavedReader(DatasetReader):
         self.validation_split = validation_split
         self.test_split = test_split
 
+        self.search_negative_labels = search_negative_labels
+        self.k_nearest = k_nearest
+
         self.manual_shards = manual_shards
+        self.seen = {}
 
     def text_to_instance(self, example: Dict) -> Instance:
         fields = {}
@@ -109,16 +115,15 @@ class WikiplotsInterleavedReader(DatasetReader):
         Returns: Instance
 
         '''
+        if file_path not in self.seen:
+            self.seen[file_path] = 0
+        else:
+            self.seen[file_path] += 1
+
+
         split_arr = file_path.split('/')
         config = split_arr[0]
         split = split_arr[1]
-
-        if len(split_arr) == 4:
-            shard_index = int(split_arr[2])
-            world_size = int(split_arr[3])
-        else:
-            shard_index = None
-            world_size = None
 
         if split == "train":
             dataset = load_dataset(f"{os.path.dirname(__file__)}/wikiplots_interleaved_hf_dataset.py", name=config,
@@ -130,17 +135,25 @@ class WikiplotsInterleavedReader(DatasetReader):
             dataset = load_dataset(f"{os.path.dirname(__file__)}/wikiplots_interleaved_hf_dataset.py", name=config,
                                    split=f'train[-{self.test_split}%:]')
 
-        if shard_index is not None:
-            dataset = dataset.shard(world_size, shard_index, contiguous=True)
-
         if self.manual_shards > 1:
-            total_num_examples = len(dataset)
-            shard_size = int(total_num_examples / self.manual_shards)
-            shard = random.Random().randint(0, self.manual_shards - 1)
-            start = shard * shard_size
-            finish = min(start + shard_size, total_num_examples - 1)
-            index_range = [r for r in range(start, finish + 1)]
-            dataset = dataset.select(index_range)
+            dataset = dataset.shard(self.manual_shards, random.randrange(0, self.manual_shards), contiguous=True)
 
-        for example in dataset:
+        if self.search_negative_labels:
+            dataset.add_elasticsearch_index("label", host="localhost", port="9200")
+
+        for i, example in enumerate(dataset):
+
+            #if self.seen[file_path] == 0 and i == 10000:
+            #    break
+
+            if self.search_negative_labels:
+                try:
+                    nearest_examples = \
+                    dataset.get_nearest_examples("label", example["label"], k=1 + self.k_nearest).examples['label'][1:]
+                    # print(f"Nearest, context: {example['label']}, {nearest_examples}")
+                    example['negative_labels'].extend(nearest_examples)
+
+                except Exception as e:
+                    pass  # print(f"Failed label: {example['label']}")
+
             yield self.text_to_instance(example)

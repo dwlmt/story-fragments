@@ -55,7 +55,7 @@ class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  input_size: int = 1,
                  target_size: int = 1,
                  step_size: int = 1,
-                 batch_size: int = 32,
+                 batch_size: int = 64,
                  dummy: bool = False,
                  shuffle: bool = True,
                  add_negative_examples: bool = False,
