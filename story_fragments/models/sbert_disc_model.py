@@ -21,8 +21,7 @@ class SbertDiscFragmentsModel(Model):
                  vocab: Vocabulary,
                  tokenizer_name="bert-base-cased",
                  model_name: str = "bert-base-cased",
-                 max_seq_length: int = 256,
-                 lm_accuracy_top_k: List[int] = [1, 5, 20]):
+                 max_seq_length: int = 256):
         super().__init__(vocab)
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
@@ -33,11 +32,7 @@ class SbertDiscFragmentsModel(Model):
         self.model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
         # self.model = SentenceTransformer(model_name)
 
-        self.lm_accuracy_top_k = lm_accuracy_top_k
         self.metrics = {}
-
-        for acc in self.lm_accuracy_top_k:
-            self.metrics[f'lm_accuracy_{acc}'] = CategoricalAccuracy()
 
     # Note that the signature of forward() needs to match that of field names
     def forward(self,

@@ -50,8 +50,7 @@ class DiscFragmentsModel(Model):
                  memory_buffer=100,
                  memory_lru: bool = True,
                  combined_n_docs: int = 5,
-                 gradient_checkpointing: bool = True,
-                 lm_accuracy_top_k: List[int] = [1, 5, 20]):
+                 gradient_checkpointing: bool = True):
         super().__init__(vocab)
 
         self.reference_embedding_weight = torch.tensor(0.5)
@@ -111,11 +110,7 @@ class DiscFragmentsModel(Model):
             self.target_model = SentenceTransformer(
                 modules=[word_target_model, pooling_target_model])  # , dense_target_model])
 
-        self.lm_accuracy_top_k = lm_accuracy_top_k
         self.metrics = {}
-
-        for acc in self.lm_accuracy_top_k:
-            self.metrics[f'lm_accuracy_{acc}'] = CategoricalAccuracy()
 
     # Note that the signature of forward() needs to match that of field names
     def forward(self,
