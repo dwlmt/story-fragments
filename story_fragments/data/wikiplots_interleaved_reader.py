@@ -31,6 +31,7 @@ class WikiplotsInterleavedReader(DatasetReader):
                  search_negative_labels: bool = False,
                  k_nearest: int = 10,
                  manual_shards: int = 1,
+                 max_instances: int = None,
                  lazy: bool = True):
         """
 
@@ -45,7 +46,7 @@ class WikiplotsInterleavedReader(DatasetReader):
             test_split (int): % test split.
             **kwargs:
         """
-        super().__init__(lazy=lazy)
+        super().__init__(lazy=lazy, max_instances=max_instances)
         self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
                                                                   max_length=generator_max_length,
                                                                   add_special_tokens=add_special_tokens,
