@@ -46,8 +46,8 @@ class DiscFragmentsModel(Model):
                  use_dataset_retrieval: bool = True,
                  use_memory_retrieval: bool = True,
                  memory_n_docs: int = 5,
-                 memory_capacity: int = 19900,
-                 memory_buffer=100,
+                 memory_capacity: int = 63000,
+                 memory_buffer=1000,
                  memory_lru: bool = True,
                  combined_n_docs: int = 5,
                  gradient_checkpointing: bool = True):
