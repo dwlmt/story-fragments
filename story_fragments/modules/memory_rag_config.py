@@ -14,7 +14,7 @@
 # limitations under the License.
 """ RAG model configuration """
 
-from transformers import RagConfig
+from transformers.models.rag import RagConfig
 
 
 class RagMemoryConfig(RagConfig):
@@ -55,7 +55,9 @@ class RagMemoryConfig(RagConfig):
             memory_buffer=1000,
             memory_lru: bool = True,
             combined_n_docs: int = 5,
-            context_encoder="facebook/dpr-ctx_encoder-multiset-base",
+            context_encoder: str = "facebook/dpr-ctx_encoder-multiset-base",
+            unlikelihood_ratio: float = 0.5,
+            unlikelihood_beta: float = 0.5,
             **kwargs
     ):
         super().__init__(
@@ -95,3 +97,5 @@ class RagMemoryConfig(RagConfig):
         self.memory_lru = memory_lru
         self.combined_n_docs = combined_n_docs
         self.context_encoder = context_encoder
+        self.unlikelihood_ratio = unlikelihood_ratio
+        self.unlikelihood_beta = unlikelihood_beta

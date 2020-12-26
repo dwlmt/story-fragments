@@ -13,32 +13,61 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """RAG model implementation."""
-
-from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from collections import defaultdict
+from typing import Optional
 
 import torch
-from transformers import DPRContextEncoder, DPRContextEncoderTokenizer, DPRContextEncoderTokenizerFast, \
+from transformers import DPRContextEncoder, DPRContextEncoderTokenizerFast, \
     PretrainedConfig, PreTrainedModel, RagConfig
-from transformers.modeling_rag import RetrievAugLMOutput, RagModel, RagTokenForGeneration, RetrievAugLMMarginOutput
+from transformers.models.rag.modeling_rag import RetrievAugLMOutput, RagModel, RagTokenForGeneration, \
+    RetrievAugLMMarginOutput
 from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
+
+def div(x, y):
+    if y == 0:
+        return x
+    else:
+        return x / y
+
+
+class NGramIterator:
+    """ N-Gram iterator for a list.
+        Based on the one from ParlAI - https://github.com/facebookresearch/ParlAI/blob/fd1b8bb565a1a27bcc8326a36afde03a963819ba/projects/dialogue_unlikelihood/agents.py
+    """
+
+    def __init__(self, lst, n):
+        self.lst = lst
+        self.n = n
+        self.max = len(lst) - n
+
+    def __iter__(self):
+        self.counter = -1
+        return self
+
+    def __next__(self):
+        self.counter += 1
+        if self.counter > self.max:
+            raise StopIteration
+        return tuple(self.lst[self.counter: self.counter + self.n])
+
+
 class RagMemoryModel(RagModel):
     def __init__(
-        self,
-        config: Optional[PretrainedConfig] = None,
-        question_encoder: Optional[PreTrainedModel] = None,
-        generator: Optional[PreTrainedModel] = None,
-        retriever: Optional = None,  # or maybe just use a `set_retriever(...)` method
-        **kwargs,
+            self,
+            config: Optional[PretrainedConfig] = None,
+            question_encoder: Optional[PreTrainedModel] = None,
+            generator: Optional[PreTrainedModel] = None,
+            retriever: Optional = None,  # or maybe just use a `set_retriever(...)` method
+            **kwargs,
     ):
         super().__init__(config=config,
-                                question_encoder=question_encoder,
-                                generator=generator,
-                                retriever=retriever,
-                                 **kwargs)
+                         question_encoder=question_encoder,
+                         generator=generator,
+                         retriever=retriever,
+                         **kwargs)
 
         def freeze_part(model: torch.nn.Module):
             for par in model.parameters():
@@ -96,7 +125,6 @@ class RagMemoryModel(RagModel):
             if has_to_retrieve:
 
                 if self.use_dataset_retrieval or self.use_memory_retrieval:
-
                     question_enc_outputs = self.question_encoder(
                         input_ids, attention_mask=attention_mask, return_dict=True
                     )
@@ -127,16 +155,7 @@ class RagMemoryModel(RagModel):
                     ).squeeze(1)
 
                 if self.use_memory_retrieval:
-                    with torch.no_grad():
-
-                        ctx_enc_outputs = self.context_encoder(
-                            input_ids, attention_mask=attention_mask, return_dict=True
-                        )
-                        #logger.info(f"Context Encoded {ctx_enc_outputs}")
-                        context_embeddings = ctx_enc_outputs.pooler_output.detach().cpu().to(torch.float32).numpy()
-                        #logger.info(f"{context_embeddings}")
-
-                        self.retriever.add(context_dicts=input_text_metadata, context_hidden_states=context_embeddings)
+                    self.add_to_memory(input_ids, attention_mask, input_text_metadata)
 
             else:
                 assert (
@@ -210,17 +229,29 @@ class RagMemoryModel(RagModel):
             generator_dec_attentions=gen_outputs.decoder_attentions,
         )
 
+    def add_to_memory(self, input_ids, attention_mask, input_text_metadata):
+        with torch.no_grad():
+            ctx_enc_outputs = self.context_encoder(
+                input_ids, attention_mask=attention_mask, return_dict=True
+            )
+            # logger.info(f"Context Encoded {ctx_enc_outputs}")
+            context_embeddings = ctx_enc_outputs.pooler_output.detach().cpu().to(torch.float32).numpy()
+            # logger.info(f"{context_embeddings}")
+
+            self.retriever.add(context_dicts=input_text_metadata, context_hidden_states=context_embeddings)
+
+
 class RagMemoryTokenForGeneration(RagTokenForGeneration):
     def __init__(
-        self,
-        config: Optional[PretrainedConfig] = None,
-        question_encoder: Optional[PreTrainedModel] = None,
-        generator: Optional[PreTrainedModel] = None,
-        retriever: Optional = None,
-        **kwargs,
+            self,
+            config: Optional[PretrainedConfig] = None,
+            question_encoder: Optional[PreTrainedModel] = None,
+            generator: Optional[PreTrainedModel] = None,
+            retriever: Optional = None,
+            **kwargs,
     ):
         assert config is not None or (
-            question_encoder is not None and generator is not None
+                question_encoder is not None and generator is not None
         ), "Either a configuration or an encoder and a generator has to be provided."
 
         if config is None:
@@ -229,29 +260,30 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         super().__init__(config=config, question_encoder=question_encoder, generator=generator, retriever=retriever)
 
         # instantiate model
-        self.rag = RagMemoryModel(config=config, question_encoder=question_encoder, generator=generator, retriever=retriever)
+        self.rag = RagMemoryModel(config=config, question_encoder=question_encoder, generator=generator,
+                                  retriever=retriever)
 
     def forward(
-        self,
-        input_ids=None,
-        attention_mask=None,
-        encoder_outputs=None,
-        decoder_input_ids=None,
-        decoder_attention_mask=None,
-        past_key_values=None,
-        context_input_ids=None,
-        context_attention_mask=None,
-        doc_scores=None,
-        use_cache=None,
-        output_attentions=None,
-        output_hidden_states=None,
-        output_retrieved=None,
-        do_marginalize=None,
-        reduce_loss=None,
-        labels=None,
-        n_docs=None,
-        input_text_metadata=None,
-        **kwargs  # needs kwargs for generation
+            self,
+            input_ids=None,
+            attention_mask=None,
+            encoder_outputs=None,
+            decoder_input_ids=None,
+            decoder_attention_mask=None,
+            past_key_values=None,
+            context_input_ids=None,
+            context_attention_mask=None,
+            doc_scores=None,
+            use_cache=None,
+            output_attentions=None,
+            output_hidden_states=None,
+            output_retrieved=None,
+            do_marginalize=None,
+            reduce_loss=None,
+            labels=None,
+            n_docs=None,
+            input_text_metadata=None,
+            **kwargs  # needs kwargs for generation
     ):
         n_docs = n_docs if n_docs is not None else self.config.n_docs
         do_marginalize = do_marginalize if do_marginalize is not None else self.config.do_marginalize
@@ -282,18 +314,31 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
 
         loss = None
         logits = outputs.logits
+        doc_scores = outputs.doc_scores
+        context_input_ids = outputs.context_input_ids
         if labels is not None:
             assert decoder_input_ids is not None
-            #print(f"nll input: {outputs.logits.size()}, {outputs.doc_scores.size()}, {labels.size()} ")
+
+            rag_logprobs = self.marginalize(logits, doc_scores, n_docs)
+
+            # #print(f"nll input: {outputs.logits.size()}, {outputs.doc_scores.size()}, {labels.size()} ")
             loss = self.get_nll(
-                outputs.logits,
-                outputs.doc_scores,
+                rag_logprobs,
+                doc_scores,
                 labels,
                 reduce_loss=reduce_loss,
                 epsilon=self.config.label_smoothing,
-
                 n_docs=n_docs,
             )
+
+            if (torch.rand(1).item() >= self.config.unlikelihood_ratio):
+                unlikelihood_loss = self.get_unlikelihood_loss(
+                    rag_logprobs,
+                    context_input_ids=context_input_ids,
+                    unlikelihood_beta=self.config.unlikelihood_beta
+                )
+                #print(f"Unlikelihood loss: {unlikelihood_loss}")
+                loss += unlikelihood_loss
 
         if do_marginalize:
             logits = self.marginalize(logits, outputs.doc_scores, n_docs)
@@ -317,7 +362,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             generator_dec_attentions=outputs.generator_dec_attentions,
         )
 
-    def get_nll(self, seq_logits, doc_scores, target, reduce_loss=False, epsilon=0.0, n_docs=None):
+    def get_nll(self, rag_logprobs, doc_scores, target, reduce_loss=False, epsilon=0.0, n_docs=None):
         n_docs = n_docs if n_docs is not None else self.config.n_docs
         # shift tokens left
         target = torch.cat(
@@ -331,8 +376,6 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
                 smooth_obj.masked_fill_(pad_mask, 0.0)
             return ll.squeeze(-1), smooth_obj.squeeze(-1)
 
-        rag_logprobs = self.marginalize(seq_logits, doc_scores, n_docs)
-
         target = target.unsqueeze(-1)
         assert target.dim() == rag_logprobs.dim()
 
@@ -340,18 +383,77 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         smooth_obj = rag_logprobs.sum(dim=-1, keepdim=True)  # total sum of all (normalised) logits
         ll, smooth_obj = _mask_pads(ll, smooth_obj)
         ll = ll.sum(1)  # sum over tokens
-        #smooth_obj = smooth_obj.sum(1)
+        # smooth_obj = smooth_obj.sum(1)
 
         nll_loss = -ll
-        #smooth_loss = -smooth_obj
+        # smooth_loss = -smooth_obj
 
         if reduce_loss:
             nll_loss = nll_loss.sum()
-            #smooth_loss = smooth_loss.sum()
+            # smooth_loss = smooth_loss.sum()
 
         eps_i = epsilon / rag_logprobs.size(-1)
-        loss = (1.0 - epsilon) * nll_loss #+ eps_i * smooth_loss
+        loss = (1.0 - epsilon) * nll_loss  # + eps_i * smooth_loss
         return loss
+
+    def count_n_grams(self, tokens, n):
+        n_grams = defaultdict(int)
+        for n_gram in NGramIterator(tokens, n):
+            n_grams[n_gram] += 1
+        return n_grams
+
+    def get_unlikelihood_loss(self, rag_logprobs, context_input_ids, unlikelihood_ngrams: int = 4,
+                              unlikelihood_beta: float = 0.5):
+
+        pred_tokens = torch.max(rag_logprobs, dim=-1)[1]
+
+        ##print(f"Unlikelihood training: {rag_logprobs.size()}, {pred_tokens.size()}, {context_input_ids.size()}")
+
+        crep_mask = torch.zeros_like(pred_tokens).type_as(rag_logprobs)
+        lrep_mask = torch.zeros_like(pred_tokens).type_as(rag_logprobs)
+
+        #print(f"Unlikelihood: {pred_tokens.size()}, {rag_logprobs.size()}, {context_input_ids}")
+        for i, (tokens, logprob, context) in enumerate(zip(pred_tokens, rag_logprobs, context_input_ids)):
+            context_ids_list = context.cpu().detach().tolist()
+            context_n_grams = self.count_n_grams(context_ids_list, n=unlikelihood_ngrams)
+
+            ##print(f"Ngrams: {context_ngrams}")
+
+            seen_n_grams = defaultdict(int)
+
+            # penalize if there is a context repeat
+            tokens_id_list = tokens.cpu().tolist()
+            for j, n_gram in enumerate(NGramIterator(tokens_id_list , unlikelihood_ngrams)):
+                if context_n_grams[n_gram] > 0:
+                    #print(f"Context seen: {n_gram}")
+                    crep_mask[i, j: j + unlikelihood_ngrams] = 1
+
+            for j, n_gram in enumerate(NGramIterator(tokens_id_list , unlikelihood_ngrams)):
+                if seen_n_grams[n_gram] > 0:
+                    #print(f"Label seen: {n_gram}")
+                    lrep_mask[i, j: j + unlikelihood_ngrams] = 1
+                seen_n_grams[n_gram] += 1
+
+            #print(f"Context Ngrams: {context_n_grams}")
+            #print(f"Seen Ngrams: {seen_n_grams}")
+
+        pred_lprobs = rag_logprobs.view(-1, rag_logprobs.size(2)).gather(1, pred_tokens.view(-1, 1).long())
+        #print(f"pred_lprobs: {rag_logprobs}, {pred_tokens}")
+
+        one_minus_probs = torch.clamp((1.0 - pred_lprobs.exp()), min=1e-6).view(
+            pred_tokens.size(0), pred_tokens.size(1)
+        )
+
+        #print(f"Masks sum: {torch.sum(lrep_mask, dim=-1)},  {torch.sum(crep_mask, dim=-1)}")
+        mask = ((1 - unlikelihood_beta) * lrep_mask) + (
+                unlikelihood_beta * crep_mask
+        )
+
+        ul_loss = -(torch.log(one_minus_probs)) * mask
+        #print(f"ul loss: {ul_loss}")
+        total_loss = ul_loss.sum()#div(ul_loss.sum(), mask.sum())
+
+        return total_loss
 
     def marginalize(self, seq_logits, doc_scores, n_docs=None):
 

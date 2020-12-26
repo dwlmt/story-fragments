@@ -21,14 +21,15 @@ from typing import List, Tuple
 import numpy as np
 from more_itertools import chunked
 from transformers import logger, BatchEncoding
-from transformers.retrieval_rag import CustomHFIndex, RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CanonicalHFIndex
+from transformers.models.rag.retrieval_rag import RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CustomHFIndex, CanonicalHFIndex
 from transformers.utils import logging
 
 from story_fragments.modules.memory_cache_index import MemoryIndex
 
 logger = logging.get_logger(__name__)
 
-class CustomMemoryHFIndex(CanonicalHFIndex):
+
+class CustomMemoryHFIndex(CustomHFIndex):
     """
     A wrapper around an instance of :class:`~datasets.Datasets`.
     The dataset and the index are both loaded from the indicated paths on disk.
@@ -61,7 +62,8 @@ class CustomMemoryHFIndex(CanonicalHFIndex):
 
         return self.dataset[doc_id]
 
-class CustomMemoryHFIndex(CustomHFIndex):
+
+class CanonicalMemoryHFIndex(CanonicalHFIndex):
     """
     A wrapper around an instance of :class:`~datasets.Datasets`.
     The dataset and the index are both loaded from the indicated paths on disk.
@@ -75,8 +77,15 @@ class CustomMemoryHFIndex(CustomHFIndex):
             The path to the serialized faiss index on disk.
     """
 
-    def __init__(self, vector_size: int, dataset, index_path=None):
-        super().__init__(vector_size, dataset, index_path=index_path)
+    def __init__(self,
+                 vector_size,
+                 dataset_name,
+                 dataset_split,
+                 index_name,
+                 index_path,
+                 use_dummy_dataset):
+        super().__init__(vector_size, vector_size=vector_size, dataset_name=dataset_name, dataset_split=dataset_split,
+                         index_name=index_name, index_path=index_path, use_dummy_dataset=use_dummy_dataset)
 
     def get_doc_dicts(self, doc_ids: np.ndarray) -> List[dict]:
         return [self.dataset[doc_ids[i].tolist()] for i in range(doc_ids.shape[0])]
@@ -145,7 +154,7 @@ class RagMemoryRetriever(RagRetriever):
                 index_path=config.index_path,
             )
         else:
-            return CanonicalHFIndex(
+            return CanonicalMemoryHFIndex(
                 vector_size=config.retrieval_vector_size,
                 dataset_name=config.dataset,
                 dataset_split=config.dataset_split,
@@ -344,7 +353,7 @@ class RagMemoryRetriever(RagRetriever):
             if skip_title:
                 doc_title = ""
                 title_sep = ""
-                
+
             if prefix is None:
                 prefix = ""
             out = (f"{prefix} {doc_title} {title_sep} {doc_text} {self.config.doc_sep} {input_string}")
