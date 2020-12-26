@@ -1,0 +1,108 @@
+{
+  "dataset_reader": {
+    "type": "interleaving-batch",
+    "batch_size": 16,
+    "readers": {
+      "moviecorpus-interleaved": {
+        "type": "moviecorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
+        "max_instances": 500000,
+        "lazy": true
+      },
+      "schmoop-interleaved": {
+        "type": "schmoop-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
+        "max_instances": 500000,
+        "lazy": true
+      },
+      "bookcorpus-interleaved": {
+        "type": "bookcorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
+        "max_instances": 500000,
+        "lazy": true
+      }
+    }
+  },
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_4_step_4/train\", \"schmoop-interleaved\": \"schmoop_context_4_label_4_step_4/train\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_4_step_4/train\"}",
+  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_4_step_4/validation\", \"schmoop-interleaved\": \"schmoop_context_4_label_4_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_4_step_4/validation\"}",
+  "data_loader": {
+    "batch_size": 4,
+    "batches_per_epoch": 15000
+  },
+  "validation_data_loader": {
+    "batch_size": 4,
+    "batches_per_epoch": 1500
+  },
+  "model": {
+    "type": "rag-fragments",
+    "rotate_grad_training": false,
+    "generator_name": "facebook/bart-large",
+    "retriever_name": "facebook/rag-token-nq",
+    "index_name": "custom",
+    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
+    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
+    "gradient_checkpointing": true,
+    "ndocs": 5,
+    "max_combined_length": 320,
+    "use_memory_retrieval": true
+  },
+   "trainer": {
+    "type": "deepspeed",
+    "use_amp": false,
+    "optimizer": {
+      "type": "adam",
+        "lr": 3e-06,
+        "eps": 1e-06
+    },
+    "deepspeed_config": {
+      "optimizer": {
+        "params": {
+          "lr": 3e-06,
+          "eps": 1e-06
+        },
+        "type": "Adam"
+      },
+      "gradient_clipping": 1.0,
+      "amp": {
+        "enabled": false
+      },
+      "fp16": {
+        "enabled": true
+      },
+      "zero_optimization": {
+        "stage": 2,
+        "allgather_partitions": true,
+        "overlap_comm": true,
+        "reduce_scatter": true,
+        "reduce_bucket_size": 15000000,
+        "allgather_bucket_size": 15000000,
+        "contiguous_gradients" : true,
+        "cpu_offload": true
+      },
+     "fp32_allreduce": false
+    },
+    "num_epochs": 15,
+    "patience": 2,
+    "num_gradient_accumulation_steps": 1,
+    "checkpointer": {
+      "num_serialized_models_to_keep": 1
+    }
+  },
+  "distributed": {
+    "cuda_devices": [
+      0,
+      1,
+      2,
+      3
+    ]
+  }
+}
