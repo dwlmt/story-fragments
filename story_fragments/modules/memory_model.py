@@ -333,8 +333,9 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
 
             if (torch.rand(1).item() >= self.config.unlikelihood_ratio):
                 unlikelihood_loss = self.get_unlikelihood_loss(
-                    rag_logprobs,
+                    rag_logprobs=rag_logprobs,
                     context_input_ids=context_input_ids,
+                    labels=labels,
                     unlikelihood_beta=self.config.unlikelihood_beta
                 )
                 #print(f"Unlikelihood loss: {unlikelihood_loss}")
@@ -402,7 +403,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             n_grams[n_gram] += 1
         return n_grams
 
-    def get_unlikelihood_loss(self, rag_logprobs, context_input_ids, unlikelihood_ngrams: int = 4,
+    def get_unlikelihood_loss(self, rag_logprobs, context_input_ids, labels, unlikelihood_ngrams: int = 4,
                               unlikelihood_beta: float = 0.5):
 
         pred_tokens = torch.max(rag_logprobs, dim=-1)[1]
@@ -413,8 +414,10 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         lrep_mask = torch.zeros_like(pred_tokens).type_as(rag_logprobs)
 
         #print(f"Unlikelihood: {pred_tokens.size()}, {rag_logprobs.size()}, {context_input_ids}")
-        for i, (tokens, logprob, context) in enumerate(zip(pred_tokens, rag_logprobs, context_input_ids)):
+        for i, (tokens, logprob, context, lab) in enumerate(zip(pred_tokens, rag_logprobs, context_input_ids, labels)):
             context_ids_list = context.cpu().detach().tolist()
+            labels_ids_list = lab.cpu().detach().tolist()
+
             context_n_grams = self.count_n_grams(context_ids_list, n=unlikelihood_ngrams)
 
             ##print(f"Ngrams: {context_ngrams}")
@@ -422,14 +425,14 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             seen_n_grams = defaultdict(int)
 
             # penalize if there is a context repeat
-            tokens_id_list = tokens.cpu().tolist()
+            tokens_id_list = tokens.cpu().detach().tolist()
             for j, n_gram in enumerate(NGramIterator(tokens_id_list , unlikelihood_ngrams)):
-                if context_n_grams[n_gram] > 0:
+                if context_n_grams[n_gram] > 0 and n_gram != tuple(labels_ids_list[j: j + unlikelihood_ngrams]):
                     #print(f"Context seen: {n_gram}")
                     crep_mask[i, j: j + unlikelihood_ngrams] = 1
 
             for j, n_gram in enumerate(NGramIterator(tokens_id_list , unlikelihood_ngrams)):
-                if seen_n_grams[n_gram] > 0:
+                if seen_n_grams[n_gram] > 0 and n_gram != tuple(labels_ids_list[j: j + unlikelihood_ngrams]):
                     #print(f"Label seen: {n_gram}")
                     lrep_mask[i, j: j + unlikelihood_ngrams] = 1
                 seen_n_grams[n_gram] += 1
