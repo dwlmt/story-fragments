@@ -24,6 +24,8 @@ import pathlib
 from random import Random
 import datasets
 from datasets.info import SupervisedKeysData
+
+import story_fragments.data.hf_interleaving_utils
 from story_fragments.data.hf_interleaving_utils import interleave_examples
 
 _DESCRIPTION = """\
@@ -316,5 +318,5 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                            self.config.target_size,
                                            self.config.step_size,
                                            dummy=self.config.dummy,
-                                           add_negative_examples=self.config.add_negative_examples):
+                                           add_negative_examples=story_fragments.data.hf_interleaving_utils.add_negative_examples):
             yield example['id'], example

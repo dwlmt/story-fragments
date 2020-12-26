@@ -1,6 +1,7 @@
 import os
 
 import random
+from functools import partial
 from random import randint
 from typing import Dict, Iterable
 
@@ -9,6 +10,8 @@ from allennlp.data.fields import TextField, MetadataField
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from datasets import load_dataset
+
+from story_fragments.data.hf_interleaving_utils import add_negative_examples
 
 
 @DatasetReader.register('wikiplots-interleaved')
@@ -29,7 +32,7 @@ class WikiplotsInterleavedReader(DatasetReader):
                  validation_split: int = 10,
                  test_split: int = 10,
                  search_negative_labels: bool = False,
-                 k_nearest: int = 10,
+                 k_nearest: int = 6,
                  manual_shards: int = 1,
                  max_instances: int = None,
                  lazy: bool = True):
@@ -93,7 +96,9 @@ class WikiplotsInterleavedReader(DatasetReader):
             fields['labels'] = TextField(target_tokens, self.generator_indexers)
 
         if "negative_labels" in example:
+
             negative_labels = example["negative_labels"]
+
             if len(negative_labels) > 1:
                 negative_label = random.choice(negative_labels)
             elif len(negative_labels) > 0:
@@ -149,12 +154,11 @@ class WikiplotsInterleavedReader(DatasetReader):
 
             if self.search_negative_labels:
                 try:
-                    nearest_examples = \
-                    dataset.get_nearest_examples("label", example["label"], k=1 + self.k_nearest).examples['label'][1:]
-                    # print(f"Nearest, context: {example['label']}, {nearest_examples}")
-                    example['negative_labels'].extend(nearest_examples)
-
+                    label = example["label"]
+                    neg_examples = dataset.get_nearest_examples("label", label, k=1 + self.k_nearest).examples['label'][
+                                   1:]
+                    example["negative_labels"].extend(neg_examples)
                 except Exception as e:
-                    pass  # print(f"Failed label: {example['label']}")
+                    print(f"Failed retrieval: {e}")
 
             yield self.text_to_instance(example)

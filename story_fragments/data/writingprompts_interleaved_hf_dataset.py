@@ -5,6 +5,7 @@ import datasets
 from datasets.info import SupervisedKeysData
 from jsonlines import jsonlines
 
+import story_fragments.data.hf_interleaving_utils
 from story_fragments.data.hf_interleaving_utils import interleave_examples
 
 
@@ -238,5 +239,5 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                self.config.step_size,
                                                dummy=self.config.dummy,
                                                contractions=True,
-                                               add_negative_examples=self.config.add_negative_examples):
+                                               add_negative_examples=story_fragments.data.hf_interleaving_utils.add_negative_examples):
                 yield example['id'], example

@@ -28,7 +28,7 @@ CONTRACTIONS_LIST = [
     ("he ' ll", "he'll"),
     ("it ' ll", "it'll"),
     ("we ' ll", "we'll"),
-    ("they 'll", "they'll"),
+    ("they ' ll", "they'll"),
     ("that ' ll", "that'll"),
     ("there ' ll", "there'll"),
     ("this ' ll", "this'll"),

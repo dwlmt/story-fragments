@@ -4,6 +4,7 @@ import re
 from collections import deque
 
 import more_itertools
+import numpy
 import textattack
 from blingfire import text_to_sentences
 from datasets import logger
@@ -218,3 +219,22 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
 
         # Remove empty episodes from the batch.
         batch_list = deque([e for e in batch_list if len(e) > 0])
+
+
+def add_negative_examples(example, dataset, k_nearest):
+    print(f"Examples: {example}")
+    try:
+        if not "added_negative_examples" in example:
+            label = example["label"]
+
+            neg_examples = dataset.get_nearest_examples("label", label, k=1 + k_nearest).examples['label'][1:]
+
+            print(f"Neg Examples: {neg_examples}")
+
+            extra_dict = {"added_negative_examples": True, "negative_labels": list(neg_examples) + list(example["negative_labels"]) }
+            print(f"Extra dict: {extra_dict}")
+            return extra_dict
+
+    except Exception as e:
+        print(f"Failed retrieval: {e}")
+        return example
