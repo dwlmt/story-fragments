@@ -1,12 +1,12 @@
 import logging
 from collections import deque
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Union
 
 import torch
 from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
 from allennlp.training.metrics import Perplexity, CategoricalAccuracy
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer, RagTokenizer
 
 from story_fragments.models.utils import freeze_part, unfreeze_part
 from story_fragments.modules.memory_model import RagMemoryTokenForGeneration
@@ -23,6 +23,7 @@ logger.setLevel("DEBUG")
 class RagFragmentsModel(Model):
     def __init__(self,
                  vocab: Vocabulary,
+                 retriever_tokenizer_name = "facebook/dpr-question_encoder-multiset-base",
                  tokenizer_name: str = "facebook/bart-base",
                  question_encoder_name: str = "facebook/dpr-question_encoder-single-nq-base",
                  retriever_name: str = "facebook/rag-token-base",
@@ -50,6 +51,7 @@ class RagFragmentsModel(Model):
         super().__init__(vocab)
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        self.retriever_tokenizer =  AutoTokenizer.from_pretrained(retriever_tokenizer_name)
 
         config = RagMemoryConfig.from_pretrained(retriever_name)
 
@@ -95,6 +97,8 @@ class RagFragmentsModel(Model):
         for acc in self.lm_accuracy_top_k:
             self.metrics[f'lm_accuracy_{acc}'] = CategoricalAccuracy(top_k=acc)
         self.metrics['lm_perplexity'] = Perplexity()
+
+        self.memory_id = 0
 
     # Note that the signature of forward() needs to match that of field names
     def forward(self,
@@ -271,3 +275,120 @@ class RagFragmentsModel(Model):
                 metrics = {**metrics, **v}
 
         return metrics
+
+
+    def generate(self, text: Union[str,List],
+                 add_to_memory: bool = True,
+                 max_length: int = 128,
+                 min_length: int = 10,
+                 repetition_penalty: float = 1.0,
+                 num_return_sequences: int = 10,
+                 no_repeat_ngram_size: int = 3,
+                 num_beams: int = 10,
+                 num_beam_groups: int = 10,
+                 length_penalty: float = 1.0,
+                 diversity_penalty: float = 0.5,
+                 do_deduplication=False) -> List[Dict[str, Any]]:
+
+        print(f"Text: {text}")
+        input_dict = self.retriever_tokenizer.encode_plus(text)
+        print(f"{input_dict}")
+        input_ids = input_dict["input_ids"]
+        attention_mask = input_dict["attention_mask"]
+
+        input_ids = torch.tensor(input_ids)
+        if len(input_ids.size()) == 1:
+            input_ids = torch.unsqueeze(input_ids, dim=0)
+
+        if torch.cuda.is_available():
+            input_ids = input_ids.cuda()
+
+        question_hidden_states = self.model.question_encoder(input_ids)[0]
+
+        if torch.cuda.is_available():
+            question_hidden_states = question_hidden_states.cuda()
+
+        print(f"Question Encoder: {question_hidden_states}")
+        docs_dict = self.retriever(input_ids.cpu().numpy(), question_hidden_states.cpu().detach().numpy(), return_tensors="pt")
+
+        if torch.cuda.is_available():
+            docs_dict["retrieved_doc_embeds"] = docs_dict["retrieved_doc_embeds"].cuda()
+            docs_dict["context_input_ids"] = docs_dict["context_input_ids"].cuda()
+            docs_dict["context_attention_mask"] = docs_dict["context_attention_mask"].cuda()
+
+        doc_scores = torch.bmm(question_hidden_states.unsqueeze(1),
+                                    docs_dict["retrieved_doc_embeds"].float().transpose(1, 2)).squeeze(1)
+
+        if torch.cuda.is_available():
+            doc_scores = doc_scores.cuda()
+            
+        print(f"Doc dict and scores: {docs_dict}, {doc_scores}")
+
+        generated = self.model.generate(context_input_ids=docs_dict["context_input_ids"],
+                                        context_attention_mask=docs_dict["context_attention_mask"],
+                                        doc_scores=doc_scores,
+                                        do_deduplication=do_deduplication,
+                                        num_beams=num_beams,
+                                        num_beam_groups=num_beam_groups,
+                                        num_return_sequences=num_return_sequences,
+                                        min_length=min_length,
+                                        max_length=max_length,
+                                        repetition_penalty=repetition_penalty,
+                                        no_repeat_ngram_size=no_repeat_ngram_size,
+                                        diversity_penalty=diversity_penalty,
+                                        length_penalty=length_penalty
+                                        )
+        #print(f"Generated: {generated}")
+        generated_strings = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
+        print(f"Inputs: {input_ids},{docs_dict['context_input_ids']}")
+        print(f"Generated strings: {generated},{generated_strings}")
+
+        generated_list = []
+        for i, (gen_ids, gen_string) in enumerate(zip(generated, generated_strings)):
+            generated = {"id": i, "text": gen_string}
+            generated_list.append(generated)
+
+        if add_to_memory:
+            self.add_to_memory(text=text, add_to_memory=add_to_memory)
+
+        return generated_list
+
+    def add_to_memory(self, text: Union[str, List],
+                 add_to_memory: bool = True) -> Dict[str, Any]:
+
+        if add_to_memory:
+            input_dict = self.retriever_tokenizer.encode_plus(text)
+
+            input_ids = input_dict["input_ids"]
+            attention_mask = input_dict["attention_mask"]
+
+            input_ids = torch.tensor(input_ids)
+            attention_mask = torch.tensor(attention_mask)
+            if len(input_ids.size()) == 1:
+                input_ids = torch.unsqueeze(input_ids, dim=0)
+                attention_mask = torch.unsqueeze(attention_mask, dim=0)
+
+            if torch.cuda.is_available():
+                input_ids = input_ids.cuda()
+                attention_mask = attention_mask.cuda()
+
+                if isinstance(text, str):
+                    text = [text]
+
+                input_text_list = []
+
+                for source_text in text:
+                    input_text_dict = {}
+                    input_text_dict["text"] = source_text
+                    input_text_dict["id"] = f"{self.memory_id}"
+                    input_text_dict["title"] = ""
+
+                    input_text_list.append(input_text_dict)
+
+                    self.memory_id += 1
+
+                if add_to_memory:
+                    #print(f"Add to memory {input_ids}, {attention_mask}, {input_text_list}")
+                    self.model.rag.add_to_memory(input_ids, attention_mask, input_text_list)
+            
+
