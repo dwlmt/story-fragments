@@ -14,11 +14,11 @@
 # limitations under the License.
 """RAG model implementation."""
 from collections import defaultdict
-from typing import Optional
+from typing import Optional, Callable, List
 
 import torch
 from transformers import DPRContextEncoder, DPRContextEncoderTokenizerFast, \
-    PretrainedConfig, PreTrainedModel, RagConfig
+    PretrainedConfig, PreTrainedModel, RagConfig, BeamSearchScorer
 from transformers.models.rag.modeling_rag import RetrievAugLMOutput, RagModel, RagTokenForGeneration, \
     RetrievAugLMMarginOutput
 from transformers.utils import logging
@@ -469,3 +469,318 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         doc_logprobs = torch.log_softmax(doc_scores, dim=1)
         log_prob_sum = seq_logprobs + doc_logprobs.unsqueeze(-1).unsqueeze(-1)
         return torch.logsumexp(log_prob_sum, dim=1)
+
+    @torch.no_grad()
+    def generate(
+            self,
+            input_ids: Optional[torch.LongTensor] = None,
+            attention_mask: Optional[torch.LongTensor] = None,
+            context_input_ids=None,
+            context_attention_mask=None,
+            doc_scores=None,
+            max_length=None,
+            min_length=None,
+            do_sample = None,
+            early_stopping = None,
+            num_beams = None,
+            temperature = None,
+            top_k = None,
+            top_p = None,
+            use_cache=None,
+            num_beam_groups=None,
+            diversity_penalty=None,
+            bos_token_id=None,
+            pad_token_id=None,
+            eos_token_id=None,
+            length_penalty=None,
+            no_repeat_ngram_size=None,
+            repetition_penalty=None,
+            bad_words_ids=None,
+            num_return_sequences=None,
+            decoder_start_token_id=None,
+            n_docs=None,
+            prefix_allowed_tokens_fn: Callable[[int, torch.Tensor], List[int]] = None,
+            **model_kwargs
+    ):
+        """
+        Implements RAG token decoding.
+
+        """
+
+        is_greedy_gen_mode = (num_beams == 1) and (num_beam_groups == 1) and do_sample is False
+        is_sample_gen_mode = (num_beams == 1) and (num_beam_groups == 1) and do_sample is True
+        is_beam_gen_mode = (num_beams > 1) and (num_beam_groups == 1) and do_sample is False
+        is_beam_sample_gen_mode = (num_beams > 1) and (num_beam_groups == 1) and do_sample is True
+        is_group_beam_gen_mode = (num_beams > 1) and (num_beam_groups > 1)
+        if num_beam_groups > num_beams:
+            raise ValueError("`num_beam_groups` has to be smaller or equal to `num_beams`")
+        if is_group_beam_gen_mode and do_sample is True:
+            raise ValueError(
+                "Diverse beam search cannot be used in sampling mode. Make sure that `do_sample` is set to `False`."
+            )
+
+        # set default parameters
+        n_docs = n_docs if n_docs is not None else self.config.n_docs
+        num_beams = num_beams if num_beams is not None else self.config.num_beams
+        num_beam_groups = num_beam_groups if num_beam_groups is not None else self.config.num_beam_groups
+
+        max_length = max_length if max_length is not None else self.config.max_length
+        num_return_sequences = (
+            num_return_sequences if num_return_sequences is not None else self.config.num_return_sequences
+        )
+        bos_token_id = bos_token_id if bos_token_id is not None else self.config.generator.bos_token_id
+        eos_token_id = eos_token_id if eos_token_id is not None else self.config.generator.eos_token_id
+        pad_token_id = pad_token_id if pad_token_id is not None else self.config.generator.pad_token_id
+        use_cache = use_cache if use_cache is not None else self.config.use_cache
+        decoder_start_token_id = (
+            decoder_start_token_id
+            if decoder_start_token_id is not None
+            else self.config.generator.decoder_start_token_id
+        )
+
+        # retrieve docs
+        if self.retriever is not None and context_input_ids is None:
+            question_hidden_states = self.question_encoder(input_ids, attention_mask=attention_mask)[0]
+            out = self.retriever(
+                input_ids,
+                question_hidden_states.cpu().detach().to(torch.float32).numpy(),
+                prefix=self.generator.config.prefix,
+                n_docs=n_docs,
+                return_tensors="pt",
+            )
+            context_input_ids, context_attention_mask, retrieved_doc_embeds = (
+                out["context_input_ids"],
+                out["context_attention_mask"],
+                out["retrieved_doc_embeds"],
+            )
+
+            # set to correct device
+            retrieved_doc_embeds = retrieved_doc_embeds.to(question_hidden_states)
+            context_input_ids = context_input_ids.to(input_ids)
+            context_attention_mask = context_attention_mask.to(input_ids)
+
+            # compute doc_scores
+            doc_scores = torch.bmm(question_hidden_states.unsqueeze(1), retrieved_doc_embeds.transpose(1, 2)).squeeze(
+                1
+            )
+
+        assert (
+                       context_input_ids.shape[0] % n_docs
+               ) == 0, f" The first dimension of `context_input_ids` should be a multiple of `n_docs`={n_docs}, but is {context_input_ids.shape[0]}."
+
+        # batch_size
+        batch_size = context_input_ids.shape[0] // n_docs
+
+        encoder = self.rag.generator.get_encoder()
+        encoder_outputs = encoder(input_ids=context_input_ids, attention_mask=context_attention_mask)
+
+        input_ids = torch.full(
+            (batch_size * num_beams, 1),
+            decoder_start_token_id,
+            dtype=torch.long,
+            device=next(self.parameters()).device,
+        )
+        last_hidden_state = encoder_outputs["last_hidden_state"]
+
+        def extend_enc_output(tensor, num_beams=None):
+            # split into `batch_size`, `num_beams`, `num_docs`
+            tensor = tensor[None, None, :].reshape((batch_size, 1, n_docs) + tensor.shape[1:])
+            # repeat same last hidden states over `num_beams` dimension
+            tensor = tensor.expand((batch_size, num_beams, n_docs) + tensor.shape[3:])
+            # merge `batch_size`, `num_beams`, `num_docs` dims again
+            return tensor.reshape((batch_size * num_beams * n_docs,) + tensor.shape[3:])
+
+        # correctly extend last_hidden_state and attention mask
+        context_attention_mask = extend_enc_output(context_attention_mask, num_beams=num_beams)
+        encoder_outputs["last_hidden_state"] = extend_enc_output(last_hidden_state, num_beams=num_beams)
+
+        doc_scores = doc_scores.repeat_interleave(num_beams, dim=0)
+
+        # define start_len & additional parameters
+        model_kwargs["doc_scores"] = doc_scores
+        model_kwargs["encoder_outputs"] = encoder_outputs
+        model_kwargs["attention_mask"] = context_attention_mask
+        model_kwargs["n_docs"] = n_docs
+
+        logits_processor = self._get_logits_processor(
+            repetition_penalty=repetition_penalty,
+            no_repeat_ngram_size=no_repeat_ngram_size,
+            bad_words_ids=bad_words_ids,
+            min_length=min_length,
+            eos_token_id=eos_token_id,
+            prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
+            num_beams=num_beams,
+            num_beam_groups=num_beam_groups if not do_sample else None,
+            diversity_penalty=diversity_penalty if not do_sample else None,
+        )
+
+        if is_greedy_gen_mode:
+            if num_return_sequences > 1:
+                raise ValueError(
+                    f"num_return_sequences has to be 1, but is {num_return_sequences} when doing greedy search."
+                )
+            return self.greedy_search(
+                input_ids,
+                logits_processor=logits_processor,
+                max_length=max_length,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
+                **model_kwargs,
+            )
+
+        elif is_sample_gen_mode:
+            # get probability distribution warper
+            logits_warper = self._get_logits_warper(
+                top_k=top_k, top_p=top_p, temperature=temperature, num_beams=num_beams
+            )
+
+            # sample
+            return self.sample(
+                input_ids,
+                logits_processor=logits_processor,
+                logits_warper=logits_warper,
+                max_length=max_length,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
+                **model_kwargs,
+            )
+
+        elif is_beam_gen_mode:
+            
+            length_penalty = length_penalty if length_penalty is not None else self.config.length_penalty
+            early_stopping = early_stopping if early_stopping is not None else self.config.early_stopping
+            if num_return_sequences > num_beams:
+                raise ValueError("`num_return_sequences` has to be smaller or equal to `num_beams`.")
+
+            beam_scorer = BeamSearchScorer(
+                batch_size=batch_size,
+                max_length=max_length,
+                num_beams=num_beams,
+                device=self.device,
+                length_penalty=length_penalty,
+                do_early_stopping=early_stopping,
+                num_beam_hyps_to_keep=num_return_sequences,
+            )
+            return self.beam_search(
+                input_ids,
+                beam_scorer,
+                logits_processor=logits_processor,
+                max_length=max_length,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
+                **model_kwargs,
+            )
+
+        elif is_beam_sample_gen_mode:
+            logits_warper = self._get_logits_warper(
+                top_k=top_k, top_p=top_p, temperature=temperature, num_beams=num_beams
+            )
+
+            length_penalty = length_penalty if length_penalty is not None else self.config.length_penalty
+
+            beam_scorer = BeamSearchScorer(
+                batch_size=batch_size,
+                max_length=max_length,
+                num_beams=num_beams,
+                device=self.device,
+                length_penalty=length_penalty,
+                do_early_stopping=early_stopping,
+                num_beam_hyps_to_keep=num_return_sequences,
+            )
+
+            return self.beam_sample(
+                input_ids,
+                beam_scorer,
+                logits_processor=logits_processor,
+                logits_warper=logits_warper,
+                max_length=max_length,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
+                **model_kwargs,
+            )
+
+        elif is_group_beam_gen_mode:
+
+            length_penalty = length_penalty if length_penalty is not None else self.config.length_penalty
+            early_stopping = early_stopping if early_stopping is not None else self.config.early_stopping
+
+            if num_return_sequences > num_beams:
+                raise ValueError("`num_return_sequences` has to be smaller or equal to `num_beams`.")
+
+            if num_beams % num_beam_groups != 0:
+                raise ValueError("`num_beams` should be divisible by `num_beam_groups` for group beam search.")
+
+            diverse_beam_scorer = BeamSearchScorer(
+                batch_size=batch_size,
+                max_length=max_length,
+                num_beams=num_beams,
+                device=self.device,
+                length_penalty=length_penalty,
+                do_early_stopping=early_stopping,
+                num_beam_hyps_to_keep=num_return_sequences,
+                num_beam_groups=num_beam_groups,
+            )
+
+            return self.group_beam_search(
+                input_ids,
+                diverse_beam_scorer,
+                logits_processor=logits_processor,
+                max_length=max_length,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
+                **model_kwargs,
+            )
+
+    def get_input_embeddings(self):
+        return self.rag.generator.get_input_embeddings()
+
+    def get_output_embeddings(self):
+        return self.rag.generator.get_output_embeddings()
+
+    def set_output_embeddings(self, new_embeddings):
+        return self.rag.generator.set_output_embeddings(new_embeddings)
+
+    def shift_tokens_right(self, input_ids, start_token_id=None):
+        """Shift input ids one token to the right, and pad with start_token_id"""
+        if start_token_id is None:
+            start_token_id = self.config.decoder_start_token_id
+        shifted_input_ids = input_ids.new_zeros(input_ids.shape)
+        shifted_input_ids[:, 1:] = input_ids[:, :-1].clone()
+        shifted_input_ids[:, 0] = start_token_id
+        return shifted_input_ids
+
+    def get_nll(self, seq_logits, doc_scores, target, reduce_loss=False, epsilon=0.0, n_docs=None):
+        n_docs = n_docs if n_docs is not None else self.config.n_docs
+        # shift tokens left
+        target = torch.cat(
+            [target[:, 1:], target.new(target.shape[0], 1).fill_(self.config.generator.pad_token_id)], 1
+        )
+
+        def _mask_pads(ll, smooth_obj):
+            pad_mask = target.eq(self.config.generator.pad_token_id)
+            if pad_mask.any():
+                ll.masked_fill_(pad_mask, 0.0)
+                smooth_obj.masked_fill_(pad_mask, 0.0)
+            return ll.squeeze(-1), smooth_obj.squeeze(-1)
+
+        rag_logprobs = self.marginalize(seq_logits, doc_scores, n_docs)
+
+        target = target.unsqueeze(-1)
+        assert target.dim() == rag_logprobs.dim()
+
+        ll = rag_logprobs.gather(dim=-1, index=target)
+        smooth_obj = rag_logprobs.sum(dim=-1, keepdim=True)  # total sum of all (normalised) logits
+        ll, smooth_obj = _mask_pads(ll, smooth_obj)
+        ll = ll.sum(1)  # sum over tokens
+        smooth_obj = smooth_obj.sum(1)
+
+        nll_loss = -ll
+        smooth_loss = -smooth_obj
+
+        if reduce_loss:
+            nll_loss = nll_loss.sum()
+            smooth_loss = smooth_loss.sum()
+
+        eps_i = epsilon / rag_logprobs.size(-1)
+        loss = (1.0 - epsilon) * nll_loss + eps_i * smooth_loss
+        return loss

@@ -151,8 +151,6 @@ class RagFragmentsModel(Model):
                 self._update_metrics(model_output, label_tokens, label_mask)
                 self._add_retrieval_info(model_output, label_tokens, results)
 
-        self._generate_if_required(input_ids, input_mask, num_sequences_to_generate, results)
-
         if self.training and self.rotate_grad_training:
             self.rotate_grad_parts_list.rotate(-1)
 
@@ -190,19 +188,6 @@ class RagFragmentsModel(Model):
             elif part_to_unfreeze == "decoder":
                 unfreeze_part(self.model.generator.context_model.decoder)
 
-    def _generate_if_required(self, input_ids, input_mask, num_sequences_to_generate, results):
-        if not self.training and num_sequences_to_generate > 0:
-            with torch.no_grad():
-                # TODO: Make the generation parameters configurable.
-                generated_sequences = self.model.generate(input_ids=input_ids,
-                                                          attention_mask=input_mask,
-                                                          num_return_sequences=num_sequences_to_generate,
-                                                          do_sample=True,
-                                                          min_length=4,
-                                                          max_length=64,
-                                                          no_repeat_ngram_size=3,
-                                                          top_p=0.9)
-                results["generated_sequences"] = generated_sequences
 
     def make_output_human_readable(self, output_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         if "generated_sequences" in output_dict:
@@ -281,14 +266,19 @@ class RagFragmentsModel(Model):
                  add_to_memory: bool = True,
                  max_length: int = 128,
                  min_length: int = 10,
-                 repetition_penalty: float = 1.0,
+                 repetition_penalty: float = 0.0,
                  num_return_sequences: int = 10,
-                 no_repeat_ngram_size: int = 3,
+                 no_repeat_ngram_size: int = 4,
                  num_beams: int = 10,
                  num_beam_groups: int = 10,
                  length_penalty: float = 1.0,
-                 diversity_penalty: float = 0.5,
-                 do_deduplication=False) -> List[Dict[str, Any]]:
+                 diversity_penalty: float = 0.0,
+                 do_deduplication=True,
+                 do_sample=True,
+                 temperature=1.0,
+                 top_k=50,
+                 top_p=0.9,
+                 ) -> List[Dict[str, Any]]:
 
         print(f"Text: {text}")
         input_dict = self.retriever_tokenizer.encode_plus(text)
@@ -297,36 +287,17 @@ class RagFragmentsModel(Model):
         attention_mask = input_dict["attention_mask"]
 
         input_ids = torch.tensor(input_ids)
+        attention_mask = torch.tensor(attention_mask)
         if len(input_ids.size()) == 1:
             input_ids = torch.unsqueeze(input_ids, dim=0)
+            attention_mask = torch.unsqueeze(attention_mask, dim=0)
 
         if torch.cuda.is_available():
             input_ids = input_ids.cuda()
+            attention_mask = attention_mask.cuda()
 
-        question_hidden_states = self.model.question_encoder(input_ids)[0]
-
-        if torch.cuda.is_available():
-            question_hidden_states = question_hidden_states.cuda()
-
-        print(f"Question Encoder: {question_hidden_states}")
-        docs_dict = self.retriever(input_ids.cpu().numpy(), question_hidden_states.cpu().detach().numpy(), return_tensors="pt")
-
-        if torch.cuda.is_available():
-            docs_dict["retrieved_doc_embeds"] = docs_dict["retrieved_doc_embeds"].cuda()
-            docs_dict["context_input_ids"] = docs_dict["context_input_ids"].cuda()
-            docs_dict["context_attention_mask"] = docs_dict["context_attention_mask"].cuda()
-
-        doc_scores = torch.bmm(question_hidden_states.unsqueeze(1),
-                                    docs_dict["retrieved_doc_embeds"].float().transpose(1, 2)).squeeze(1)
-
-        if torch.cuda.is_available():
-            doc_scores = doc_scores.cuda()
-            
-        print(f"Doc dict and scores: {docs_dict}, {doc_scores}")
-
-        generated = self.model.generate(context_input_ids=docs_dict["context_input_ids"],
-                                        context_attention_mask=docs_dict["context_attention_mask"],
-                                        doc_scores=doc_scores,
+        generated = self.model.generate(input_ids=input_ids,
+                                        attention_mask=attention_mask,
                                         do_deduplication=do_deduplication,
                                         num_beams=num_beams,
                                         num_beam_groups=num_beam_groups,
@@ -336,11 +307,14 @@ class RagFragmentsModel(Model):
                                         repetition_penalty=repetition_penalty,
                                         no_repeat_ngram_size=no_repeat_ngram_size,
                                         diversity_penalty=diversity_penalty,
-                                        length_penalty=length_penalty
+                                        length_penalty=length_penalty,
+                                        do_sample=do_sample,
+                                        temperature=temperature,
+                                        top_k=top_k,
+                                        top_p=top_p,
                                         )
         #print(f"Generated: {generated}")
         generated_strings = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
-        print(f"Inputs: {input_ids},{docs_dict['context_input_ids']}")
         print(f"Generated strings: {generated},{generated_strings}")
 
         generated_list = []
