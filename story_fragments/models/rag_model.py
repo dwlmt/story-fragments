@@ -108,6 +108,7 @@ class RagFragmentsModel(Model):
                 metadata: List[Dict[str, Any]] = None,
                 dataset: List[str] = None,
                 num_sequences_to_generate: int = 0,
+                inference: bool = False
                 ) -> Dict[str, torch.Tensor]:
 
         logger.debug(f"Input: {metadata}")
@@ -119,31 +120,41 @@ class RagFragmentsModel(Model):
         input_ids = text["tokens"]['token_ids']
         input_mask = text["tokens"]['mask']
 
-        if labels is not None:
+        batch_size = len(input_ids)
+        print(f"Batch size: {batch_size}")
+
+        input_text_list = []
+
+        for id, source_text in zip([m['id'] for m in metadata], [m['text'] for m in metadata]):
+            input_text_dict = {}
+            input_text_dict["id"] = id
+            input_text_dict["text"] = source_text
+            input_text_dict["title"] = ""
+
+            input_text_list.append(input_text_dict)
+
+        if labels is None:
+
+            model_output = self.model(input_ids=input_ids,
+                                      attention_mask=input_mask,
+                                      input_text_metadata=input_text_list,
+                                      output_retrieved=True,
+                                      )
+
+        else:
 
             label_tokens = labels["tokens"]['token_ids']
 
-            input_text_list = []
-
-            for id, source_text in zip([m['id'] for m in metadata], [m['text'] for m in metadata]):
-                input_text_dict = {}
-                input_text_dict["id"] = id
-                input_text_dict["text"] = source_text
-                input_text_dict["title"] = ""
-
-                input_text_list.append(input_text_dict)
+            print(f"Model Inputs: {input_ids.size()}, {label_tokens.size()}")
 
             model_output = self.model(input_ids=input_ids,
                                       attention_mask=input_mask,
                                       input_text_metadata=input_text_list,
                                       labels=label_tokens,
-                                      context_input_ids=torch.unsqueeze(input_ids, dim=1).repeat(1, 5, 1),
-                                      context_attention_mask=torch.unsqueeze(input_mask, dim=1).repeat(1, 5, 1),
                                       output_retrieved=True,
                                       )
 
             loss = torch.mean(model_output.loss)
-
             results["loss"] = loss
 
             if not self.training:
@@ -153,6 +164,33 @@ class RagFragmentsModel(Model):
 
         if self.training and self.rotate_grad_training:
             self.rotate_grad_parts_list.rotate(-1)
+
+
+        if not self.training:
+
+            #generator_enc_last_hidden_state
+
+            print(f"{model_output.doc_scores.size(),model_output.retrieved_doc_embeds.size(),model_output.generator_enc_last_hidden_state.size()}")
+            doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1),dim=2)
+
+            x = doc_scores_softmax  * model_output.retrieved_doc_embeds
+            norm = x.norm(p=2, dim=-2, keepdim=True)
+            x_normalized = x.div(norm.expand_as(x))
+            results["retrieved_doc_embeddings"] = x_normalized
+
+            generator_enc_last_hidden_state = model_output.generator_enc_last_hidden_state
+            if generator_enc_last_hidden_state.size()[0] != batch_size:
+                generator_enc_last_hidden_state = torch.unsqueeze(generator_enc_last_hidden_state, dim=0)
+
+            while len(doc_scores_softmax.size()) < len(generator_enc_last_hidden_state.size()):
+                doc_scores_softmax = torch.unsqueeze(doc_scores_softmax, dim=-1)
+
+            print(f"{doc_scores_softmax.size()}, {generator_enc_last_hidden_state.size()}")
+
+            x =  torch.mean((doc_scores_softmax * generator_enc_last_hidden_state),dim=-2)
+            norm = x.norm(p=2, dim=-2, keepdim=True)
+            x_normalized = x.div(norm.expand_as(x))
+            results["generator_enc_embeddings"] = x_normalized
 
         results["input"] = metadata
         logger.debug(f"Results: {results}")
