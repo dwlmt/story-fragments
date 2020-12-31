@@ -115,7 +115,7 @@ class ProcessDPRDataset(object):
                         passage_dict["title"] = f"{obj['id']}-{i}: {obj['title']}"
                         passage_dict["text"] = joined_text
 
-                        print(f"Passage: {passage_dict}")
+                        #print(f"Passage: {passage_dict}")
                         output_list.append(passage_dict)
 
                         id += 1

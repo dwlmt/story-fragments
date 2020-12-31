@@ -134,6 +134,16 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                             data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                             data_download_checksum=_DOWNLOAD_CHECKSUM,
                                             version=_VERSION),
+        WikiPlotsInterleavedHfDatasetConfig(name="wikiplots_context_4_label_4_step_4b",
+                                            description="Wikiplots with one sentence of context, "
+                                                        "labels and a one sentence step.",
+                                            input_size=4,
+                                            target_size=4,
+                                            step_size=4,
+                                            data_url=_URL,
+                                            data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                            data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                            version=_VERSION),
         WikiPlotsInterleavedHfDatasetConfig(name="wikiplots_context_4_label_4_step_4_neg",
                                             description="Wikiplots with one sentence of context, "
                                                         "labels and a one sentence step.",

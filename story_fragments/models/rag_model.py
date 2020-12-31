@@ -168,29 +168,27 @@ class RagFragmentsModel(Model):
 
         if not self.training:
 
-            #generator_enc_last_hidden_state
+            with torch.no_grad():
 
-            print(f"{model_output.doc_scores.size(),model_output.retrieved_doc_embeds.size(),model_output.generator_enc_last_hidden_state.size()}")
-            doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1),dim=2)
+                #generator_enc_last_hidden_state
 
-            x = doc_scores_softmax  * model_output.retrieved_doc_embeds
-            norm = x.norm(p=2, dim=-2, keepdim=True)
-            x_normalized = x.div(norm.expand_as(x))
-            results["retrieved_doc_embeddings"] = x_normalized
+                print(f"{model_output.doc_scores.size(),model_output.retrieved_doc_embeds.size(),model_output.generator_enc_last_hidden_state.size()}")
+                doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1),dim=2)
 
-            generator_enc_last_hidden_state = model_output.generator_enc_last_hidden_state
-            if generator_enc_last_hidden_state.size()[0] != batch_size:
-                generator_enc_last_hidden_state = torch.unsqueeze(generator_enc_last_hidden_state, dim=0)
+                x = torch.mean(doc_scores_softmax  * model_output.retrieved_doc_embeds * self.rag_ndocs, dim=-2)
+                results["retrieved_doc_embeddings"] = x
 
-            while len(doc_scores_softmax.size()) < len(generator_enc_last_hidden_state.size()):
-                doc_scores_softmax = torch.unsqueeze(doc_scores_softmax, dim=-1)
+                generator_enc_last_hidden_state = model_output.generator_enc_last_hidden_state
+                if generator_enc_last_hidden_state.size()[0] != batch_size:
+                    generator_enc_last_hidden_state = torch.unsqueeze(generator_enc_last_hidden_state, dim=0)
 
-            print(f"{doc_scores_softmax.size()}, {generator_enc_last_hidden_state.size()}")
+                while len(doc_scores_softmax.size()) < len(generator_enc_last_hidden_state.size()):
+                    doc_scores_softmax = torch.unsqueeze(doc_scores_softmax, dim=-1)
 
-            x =  torch.mean((doc_scores_softmax * generator_enc_last_hidden_state),dim=-2)
-            norm = x.norm(p=2, dim=-2, keepdim=True)
-            x_normalized = x.div(norm.expand_as(x))
-            results["generator_enc_embeddings"] = x_normalized
+
+                x =  torch.mean((doc_scores_softmax * generator_enc_last_hidden_state * self.rag_ndocs),dim=-2)
+                x = torch.mean(x, dim=-2)
+                results["generator_enc_embeddings"] = x
 
         results["input"] = metadata
         logger.debug(f"Results: {results}")
