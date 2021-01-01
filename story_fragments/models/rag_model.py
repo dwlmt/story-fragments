@@ -43,7 +43,7 @@ class RagFragmentsModel(Model):
                  use_dataset_retrieval: bool = True,
                  use_memory_retrieval: bool = True,
                  memory_n_docs: int = 5,
-                 memory_capacity: int = 63000,
+                 memory_capacity: int = 127000,
                  memory_buffer=1000,
                  memory_lru: bool = True,
                  combined_n_docs: int = 5,
@@ -172,21 +172,31 @@ class RagFragmentsModel(Model):
 
                 #generator_enc_last_hidden_state
 
-                print(f"{model_output.doc_scores.size(),model_output.retrieved_doc_embeds.size(),model_output.generator_enc_last_hidden_state.size()}")
+
                 doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1),dim=2)
+
+                '''
+                question_enc_hidden_states = model_output.question_enc_hidden_states[0]
+                print(f"question_enc_hidden_states: {question_enc_hidden_states.size()}")
+                x = torch.mean(question_enc_hidden_states, dim=-2)
+                results["question_enc_embeddings"] = x
+                '''
 
                 x = torch.mean(doc_scores_softmax  * model_output.retrieved_doc_embeds * self.rag_ndocs, dim=-2)
                 results["retrieved_doc_embeddings"] = x
 
                 generator_enc_last_hidden_state = model_output.generator_enc_last_hidden_state
+
+                context_mask = model_output.context_attention_mask.bool()
+
                 if generator_enc_last_hidden_state.size()[0] != batch_size:
                     generator_enc_last_hidden_state = torch.unsqueeze(generator_enc_last_hidden_state, dim=0)
+                    context_mask = torch.unsqueeze(context_mask, dim=0)
 
                 while len(doc_scores_softmax.size()) < len(generator_enc_last_hidden_state.size()):
                     doc_scores_softmax = torch.unsqueeze(doc_scores_softmax, dim=-1)
 
-
-                x =  torch.mean((doc_scores_softmax * generator_enc_last_hidden_state * self.rag_ndocs),dim=-2)
+                x =  torch.mean((doc_scores_softmax * generator_enc_last_hidden_state[context_mask] * self.rag_ndocs),dim=-2)
                 x = torch.mean(x, dim=-2)
                 results["generator_enc_embeddings"] = x
 
