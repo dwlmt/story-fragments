@@ -137,6 +137,7 @@ class RagFragmentsInferencePredictor(Predictor):
             if self._keep_embeddings:
                 example["retrieved_doc_embedding"] = outputs["retrieved_doc_embeddings"].tolist()
                 example["generator_enc_embedding"] = outputs["generator_enc_embeddings"].tolist()
+                #example["question_enc_embedding"] = outputs["question_enc_embeddings"].tolist()
 
             model_outputs_list.append(outputs)
 
@@ -178,6 +179,11 @@ class RagFragmentsInferencePredictor(Predictor):
                 res_dict[f"{name}_wasserstein_dist"] = wass_dist
 
                 return  res_dict
+
+            first_doc_emb = torch.tensor(first["retrieved_doc_embeddings"])
+            second_doc_emb = torch.tensor(second["retrieved_doc_embeddings"])
+            metrics = vector_distance_metrics("retrieved_doc_embedding", first_doc_emb, second_doc_emb)
+            results["passages"][i]["prediction_metrics"] = metrics
 
             first_doc_emb = torch.tensor(first["retrieved_doc_embeddings"])
             second_doc_emb = torch.tensor(second["retrieved_doc_embeddings"])

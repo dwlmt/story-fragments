@@ -29,24 +29,24 @@ class RagFragmentsGenerationPredictor(Predictor):
         self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=4))
         self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
 
-        self._length_to_generate = int(os.getenv("GENERATE_LENGTH", default=20))
+        self._length_to_generate = int(os.getenv("GENERATE_LENGTH", default=50))
 
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
-        self._min_length = int(os.getenv("MIN_LENGTH", default=10))
+        self._min_length = int(os.getenv("MIN_LENGTH", default=20))
         self._max_length = int(os.getenv("MIN_LENGTH", default=128))
         self._repetition_penalty = float(os.getenv("REPETITION_PENALTY", default=1.0))
         self._num_return_sequences = int(os.getenv("NUM_RETURN_SEQUENCES", default=10))
         self._no_repeat_ngram_size = int(os.getenv("NO_REPEAT_NGRAM_SIZE", default=4))
-        self._num_beams = int(os.getenv("NUM_BEAMS", default=10))
-        self._num_beam_groups = int(os.getenv("NUM_BEAM_GROUPS", default=10))
+        self._num_beams = int(os.getenv("NUM_BEAMS", default=1))
+        self._num_beam_groups = int(os.getenv("NUM_BEAM_GROUPS", default=1))
 
         self._top_k = int(os.getenv("TOP_K", default=50))
         self._top_p = float(os.getenv("TOP_P", default=0.9))
         self._temperature =  float(os.getenv("TEMPERATURE", default=1.0))
 
         self._length_penalty = float(os.getenv("LENGTH_PENALTY", default=1.0))
-        self._diversity_penalty = float(os.getenv("DIVERSITY_PENALTY", default=1.0))
-        self._do_sample = parse_bool(os.getenv("DO_SAMPLE", default="False"))
+        self._diversity_penalty = float(os.getenv("DIVERSITY_PENALTY", default=0.5))
+        self._do_sample = parse_bool(os.getenv("DO_SAMPLE", default="True"))
 
     def predict(self, sentences: List[str] = None,  text: str = None, passage: str = None) -> JsonDict:
 
@@ -109,7 +109,8 @@ class RagFragmentsGenerationPredictor(Predictor):
                                                      )
 
                     if not isinstance(generated, dict):
-                        next_passage["alternatives"] = generated
+                        if len(generated) > 1:
+                            next_passage["alternatives"] = generated
                         generated = choice(generated)
 
                     next_passage["seq_num"] = i + j
