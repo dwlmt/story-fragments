@@ -56,7 +56,7 @@ class RagMemoryConfig(RagConfig):
             memory_lru: bool = True,
             combined_n_docs: int = 5,
             context_encoder: str = "facebook/dpr-ctx_encoder-multiset-base",
-            unlikelihood_ratio: float = 0.5,
+            unlikelihood_ratio: float = 0.0,
             unlikelihood_beta: float = 0.5,
             **kwargs
     ):

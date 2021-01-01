@@ -17,6 +17,7 @@ from collections import defaultdict
 from typing import Optional, Callable, List
 
 import torch
+from torch.nn.utils.rnn import pad_sequence
 from transformers import DPRContextEncoder, DPRContextEncoderTokenizerFast, \
     PretrainedConfig, PreTrainedModel, RagConfig, BeamSearchScorer
 from transformers.models.rag.modeling_rag import RetrievAugLMOutput, RagModel, RagTokenForGeneration, \
@@ -25,6 +26,7 @@ from transformers.utils import logging
 
 logger = logging.get_logger(__name__)
 
+PAD_VALUE = 1
 
 def div(x, y):
     if y == 0:
@@ -462,7 +464,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
     def marginalize(self, seq_logits, doc_scores, n_docs=None):
 
         n_docs = n_docs if n_docs is not None else self.config.n_docs
-        print(f"Seq Logits: {seq_logits.size()}")
+        #print(f"Seq Logits: {seq_logits.size()}")
 
         # RAG-token marginalization
         seq_logprobs = torch.nn.functional.log_softmax(seq_logits, dim=-1).view(
@@ -636,16 +638,38 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
                 top_k=top_k, top_p=top_p, temperature=temperature, num_beams=num_beams
             )
 
-            # sample
-            return self.sample(
-                input_ids,
-                logits_processor=logits_processor,
-                logits_warper=logits_warper,
-                max_length=max_length,
-                pad_token_id=pad_token_id,
-                eos_token_id=eos_token_id,
-                **model_kwargs,
-            )
+            if num_return_sequences == 1:
+                # sample
+                return self.sample(
+                    input_ids,
+                    logits_processor=logits_processor,
+                    logits_warper=logits_warper,
+                    max_length=max_length,
+                    pad_token_id=pad_token_id,
+                    eos_token_id=eos_token_id,
+                    **model_kwargs,
+                )
+            else:
+                generated_list = []
+                for i in range(num_return_sequences):
+
+                    generated_list.append(torch.squeeze(
+                        self.sample(
+                            input_ids,
+                            logits_processor=logits_processor,
+                            logits_warper=logits_warper,
+                            max_length=max_length,
+                            pad_token_id=pad_token_id,
+                            eos_token_id=eos_token_id,
+                            **model_kwargs,
+                        ))
+                    )
+
+                print(f"Generated list: {generated_list}")
+                generated_tensor = pad_sequence(generated_list, batch_first=True, padding_value=PAD_VALUE)
+
+                print(f"Generated tensor: {generated_tensor}")
+                return generated_tensor
 
         elif is_beam_gen_mode:
             
