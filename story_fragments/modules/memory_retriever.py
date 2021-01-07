@@ -196,6 +196,10 @@ class RagMemoryRetriever(RagRetriever):
 
                 memory_ids, memory_vectors, memory_distances = self.memory_index.get_top_docs(question_hidden_states,
                                                                                               self.config.memory_n_docs)
+
+                if self.config.memory_retrieval_weighting != 1.0:
+                    memory_distances = [m * self.config.memory_retrieval_weighting for m in memory_distances]
+
                 logger.debug(f"Memory retrieval: {memory_ids}, {memory_vectors.shape}, {memory_distances}")
                 logger.debug(
                     "memory index search time: {} sec, batch size {}".format(
@@ -455,3 +459,7 @@ class RagMemoryRetriever(RagRetriever):
         """
         if self.memory_index is not None:
             self.memory_index.add(context_dicts=context_dicts, context_hidden_states=context_hidden_states)
+
+    def clear_memory(self):
+
+        self.memory_index.clear_memory()

@@ -3,6 +3,7 @@ from collections import OrderedDict
 from typing import List, Tuple, Any
 
 import faiss
+import more_itertools
 import numpy as np
 
 
@@ -180,6 +181,16 @@ class MemoryIndex:
         """
         logger.debug(f"Remove from Faiss: {doc_ids}")
         self.index.remove_ids(doc_ids)
+
+    def clear_memory(self):
+        """ Clear the Faiss index.
+        """
+        for chunk in more_itertools.chunked(self.cache.cache.items(),100):
+            ids = [c[0] for c in chunk]
+            doc_ids = np.asarray(ids)
+            print(f"Clear doc_ids: {doc_ids}")
+            self.index.remove_ids(doc_ids)
+            
 
     def __len__(self):
         return len(self.cache)

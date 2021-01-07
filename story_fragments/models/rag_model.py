@@ -43,10 +43,14 @@ class RagFragmentsModel(Model):
                  use_dataset_retrieval: bool = True,
                  use_memory_retrieval: bool = True,
                  memory_n_docs: int = 5,
-                 memory_capacity: int = 127000,
+                 memory_capacity: int = 63000,
                  memory_buffer=1000,
                  memory_lru: bool = True,
                  combined_n_docs: int = 5,
+                 entmax: bool = False,
+                 entmax_k: int = 512,
+                 unlikelihood_ratio: float = 1.0,
+                 unlikelihood_beta: float = 0.5,
                  ):
         super().__init__(vocab)
 
@@ -74,6 +78,12 @@ class RagFragmentsModel(Model):
         config.memory_lru = memory_lru
         config.combined_n_docs = combined_n_docs
         config.context_encoder = context_encoder
+
+        config.entmax = entmax
+        config.entmax_k = entmax_k
+
+        config.unlikelihood_beta = unlikelihood_beta
+        config.unlikelihood_ratio = unlikelihood_ratio
 
         self.retriever = RagMemoryRetriever.from_pretrained(retriever_name,
                                                             config=config)
@@ -121,7 +131,6 @@ class RagFragmentsModel(Model):
         input_mask = text["tokens"]['mask']
 
         batch_size = len(input_ids)
-        print(f"Batch size: {batch_size}")
 
         input_text_list = []
 
@@ -145,7 +154,7 @@ class RagFragmentsModel(Model):
 
             label_tokens = labels["tokens"]['token_ids']
 
-            print(f"Model Inputs: {input_ids.size()}, {label_tokens.size()}")
+            #print(f"Model Inputs: {input_ids.size()}, {label_tokens.size()}")
 
             model_output = self.model(input_ids=input_ids,
                                       attention_mask=input_mask,
@@ -170,17 +179,7 @@ class RagFragmentsModel(Model):
 
             with torch.no_grad():
 
-                #generator_enc_last_hidden_state
-
-
                 doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1),dim=2)
-
-                '''
-                question_enc_hidden_states = model_output.question_enc_hidden_states[0]
-                print(f"question_enc_hidden_states: {question_enc_hidden_states.size()}")
-                x = torch.mean(question_enc_hidden_states, dim=-2)
-                results["question_enc_embeddings"] = x
-                '''
 
                 x = torch.mean(doc_scores_softmax  * model_output.retrieved_doc_embeds * self.rag_ndocs, dim=-2)
                 results["retrieved_doc_embeddings"] = x
@@ -196,9 +195,12 @@ class RagFragmentsModel(Model):
                 while len(doc_scores_softmax.size()) < len(generator_enc_last_hidden_state.size()):
                     doc_scores_softmax = torch.unsqueeze(doc_scores_softmax, dim=-1)
 
-                x =  torch.mean((doc_scores_softmax * generator_enc_last_hidden_state[context_mask] * self.rag_ndocs),dim=-2)
+                generator_indexed = generator_enc_last_hidden_state[context_mask]
+                x =  torch.mean((doc_scores_softmax * generator_indexed * self.rag_ndocs),dim=-2)
                 x = torch.mean(x, dim=-2)
                 results["generator_enc_embeddings"] = x
+
+                results["perplexity"] = model_output.loss#torch.exp(model_output.loss) / generator_indexed.size()[-1]
 
         results["input"] = metadata
         logger.debug(f"Results: {results}")
@@ -368,8 +370,8 @@ class RagFragmentsModel(Model):
             generated = {"id": i, "text": gen_string}
             generated_list.append(generated)
 
-        if add_to_memory:
-            self.add_to_memory(text=text, add_to_memory=add_to_memory)
+        #if add_to_memory:
+        #    self.add_to_memory(text=text, add_to_memory=add_to_memory)
 
         return generated_list
 
@@ -410,5 +412,9 @@ class RagFragmentsModel(Model):
                 if add_to_memory:
                     #print(f"Add to memory {input_ids}, {attention_mask}, {input_text_list}")
                     self.model.rag.add_to_memory(input_ids, attention_mask, input_text_list)
+
+    def clear_memory(self):
+
+        self.model.rag.clear_memory()
             
 

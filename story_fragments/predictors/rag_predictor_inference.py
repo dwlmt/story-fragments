@@ -110,7 +110,7 @@ class RagFragmentsInferencePredictor(Predictor):
                 example = {}
                 example["id"] = f"{i}"
                 example["text"] = " ".join(input_text).strip()
-                example["labels"] = " ".join(label_text).strip()
+                example["label"] = " ".join(label_text).strip()
 
                 example_batches.append(example)
 
@@ -121,7 +121,7 @@ class RagFragmentsInferencePredictor(Predictor):
                 example = {}
                 example["id"] = f"{i}"
                 example["text"] = text
-                example["labels"] = label
+                example["label"] = label
 
                 example_batches.append(example)
 
@@ -194,6 +194,10 @@ class RagFragmentsInferencePredictor(Predictor):
             second_doc_emb = torch.tensor(second["generator_enc_embeddings"])
             metrics = vector_distance_metrics("generator_enc_embedding", first_doc_emb, second_doc_emb)
             results["passages"][i]["prediction_metrics"] = {**metrics,**results["passages"][i]["prediction_metrics"]}
+
+            results["passages"][i]["prediction_metrics"]["perplexity"] = first["perplexity"].item()
+
+        self._model.clear_memory()
 
         return results
 

@@ -17,9 +17,12 @@ from collections import defaultdict
 from typing import Optional, Callable, List
 
 import torch
+from entmax import Entmax15Loss, entmax15
+from torch.nn import functional as F
+from torch.nn.functional import one_hot
 from torch.nn.utils.rnn import pad_sequence
 from transformers import DPRContextEncoder, DPRContextEncoderTokenizerFast, \
-    PretrainedConfig, PreTrainedModel, RagConfig, BeamSearchScorer
+    PretrainedConfig, PreTrainedModel, RagConfig, BeamSearchScorer, LogitsProcessorList, BeamScorer
 from transformers.models.rag.modeling_rag import RetrievAugLMOutput, RagModel, RagTokenForGeneration, \
     RetrievAugLMMarginOutput
 from transformers.utils import logging
@@ -27,6 +30,7 @@ from transformers.utils import logging
 logger = logging.get_logger(__name__)
 
 PAD_VALUE = 1
+
 
 def div(x, y):
     if y == 0:
@@ -242,6 +246,9 @@ class RagMemoryModel(RagModel):
 
             self.retriever.add(context_dicts=input_text_metadata, context_hidden_states=context_embeddings)
 
+    def clear_memory(self):
+
+        self.retriever.clear_memory()
 
 class RagMemoryTokenForGeneration(RagTokenForGeneration):
     def __init__(
@@ -340,7 +347,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
                     labels=labels,
                     unlikelihood_beta=self.config.unlikelihood_beta
                 )
-                #print(f"Unlikelihood loss: {unlikelihood_loss}")
+                # print(f"Unlikelihood loss: {unlikelihood_loss}")
                 loss += unlikelihood_loss
 
         if do_marginalize:
@@ -382,22 +389,30 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         target = target.unsqueeze(-1)
         assert target.dim() == rag_logprobs.dim()
 
-        ll = rag_logprobs.gather(dim=-1, index=target)
-        smooth_obj = rag_logprobs.sum(dim=-1, keepdim=True)  # total sum of all (normalised) logits
-        ll, smooth_obj = _mask_pads(ll, smooth_obj)
-        ll = ll.sum(1)  # sum over tokens
-        # smooth_obj = smooth_obj.sum(1)
+        if not self.config.entmax:
+            ll = rag_logprobs.gather(dim=-1, index=target)
+            smooth_obj = rag_logprobs.sum(dim=-1, keepdim=True)  # total sum of all (normalised) logits
+            ll, smooth_obj = _mask_pads(ll, smooth_obj)
+            ll = ll.sum(1)  # sum over tokens
+            # smooth_obj = smooth_obj.sum(1)
 
-        nll_loss = -ll
-        # smooth_loss = -smooth_obj
+            nll_loss = -ll
+            # smooth_loss = -smooth_obj
 
-        if reduce_loss:
-            nll_loss = nll_loss.sum()
-            # smooth_loss = smooth_loss.sum()
+            if reduce_loss:
+                nll_loss = nll_loss.sum()
+                # smooth_loss = smooth_loss.sum()
 
-        eps_i = epsilon / rag_logprobs.size(-1)
-        loss = (1.0 - epsilon) * nll_loss  # + eps_i * smooth_loss
-        return loss
+            eps_i = epsilon / rag_logprobs.size(-1)
+            loss = (1.0 - epsilon) * nll_loss  # + eps_i * smooth_loss
+            return loss
+        else:
+            entmax_loss = Entmax15Loss(k=self.config.entmax_k, ignore_index=self.config.pad_token_id, reduction="sum")
+            target = torch.squeeze(target, dim=2)
+
+            loss = entmax_loss(torch.exp(rag_logprobs).view(rag_logprobs.size()[0] * rag_logprobs.size()[1], -1),
+                               target.view(target.size()[0] * target.size()[1]))
+            return loss
 
     def count_n_grams(self, tokens, n):
         n_grams = defaultdict(int)
@@ -415,7 +430,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         crep_mask = torch.zeros_like(pred_tokens).type_as(rag_logprobs)
         lrep_mask = torch.zeros_like(pred_tokens).type_as(rag_logprobs)
 
-        #print(f"Unlikelihood: {pred_tokens.size()}, {rag_logprobs.size()}, {context_input_ids}")
+        # print(f"Unlikelihood: {pred_tokens.size()}, {rag_logprobs.size()}, {context_input_ids}")
         for i, (tokens, logprob, context, lab) in enumerate(zip(pred_tokens, rag_logprobs, context_input_ids, labels)):
             context_ids_list = context.cpu().detach().tolist()
             labels_ids_list = lab.cpu().detach().tolist()
@@ -428,43 +443,42 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
 
             # penalize if there is a context repeat
             tokens_id_list = tokens.cpu().detach().tolist()
-            for j, n_gram in enumerate(NGramIterator(tokens_id_list , unlikelihood_ngrams)):
+            for j, n_gram in enumerate(NGramIterator(tokens_id_list, unlikelihood_ngrams)):
                 if context_n_grams[n_gram] > 0 and n_gram != tuple(labels_ids_list[j: j + unlikelihood_ngrams]):
-                    #print(f"Context seen: {n_gram}")
+                    # print(f"Context seen: {n_gram}")
                     crep_mask[i, j: j + unlikelihood_ngrams] = 1
 
-            for j, n_gram in enumerate(NGramIterator(tokens_id_list , unlikelihood_ngrams)):
+            for j, n_gram in enumerate(NGramIterator(tokens_id_list, unlikelihood_ngrams)):
                 if seen_n_grams[n_gram] > 0 and n_gram != tuple(labels_ids_list[j: j + unlikelihood_ngrams]):
-                    #print(f"Label seen: {n_gram}")
+                    # print(f"Label seen: {n_gram}")
                     lrep_mask[i, j: j + unlikelihood_ngrams] = 1
                 seen_n_grams[n_gram] += 1
 
-            #print(f"Context Ngrams: {context_n_grams}")
-            #print(f"Seen Ngrams: {seen_n_grams}")
+            # print(f"Context Ngrams: {context_n_grams}")
+            # print(f"Seen Ngrams: {seen_n_grams}")
 
         pred_lprobs = rag_logprobs.view(-1, rag_logprobs.size(2)).gather(1, pred_tokens.view(-1, 1).long())
-        #print(f"pred_lprobs: {rag_logprobs}, {pred_tokens}")
+        # print(f"pred_lprobs: {rag_logprobs}, {pred_tokens}")
 
         one_minus_probs = torch.clamp((1.0 - pred_lprobs.exp()), min=1e-6).view(
             pred_tokens.size(0), pred_tokens.size(1)
         )
 
-        #print(f"Masks sum: {torch.sum(lrep_mask, dim=-1)},  {torch.sum(crep_mask, dim=-1)}")
+        # print(f"Masks sum: {torch.sum(lrep_mask, dim=-1)},  {torch.sum(crep_mask, dim=-1)}")
         mask = ((1 - unlikelihood_beta) * lrep_mask) + (
                 unlikelihood_beta * crep_mask
         )
 
         ul_loss = -(torch.log(one_minus_probs)) * mask
-        #print(f"ul loss: {ul_loss}")
-        total_loss = ul_loss.sum()#div(ul_loss.sum(), mask.sum())
+        # print(f"ul loss: {ul_loss}")
+        total_loss = ul_loss.sum()  # div(ul_loss.sum(), mask.sum())
 
         return total_loss
-
 
     def marginalize(self, seq_logits, doc_scores, n_docs=None):
 
         n_docs = n_docs if n_docs is not None else self.config.n_docs
-        #print(f"Seq Logits: {seq_logits.size()}")
+        # print(f"Seq Logits: {seq_logits.size()}")
 
         # RAG-token marginalization
         seq_logprobs = torch.nn.functional.log_softmax(seq_logits, dim=-1).view(
@@ -484,12 +498,12 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             doc_scores=None,
             max_length=None,
             min_length=None,
-            do_sample = None,
-            early_stopping = None,
-            num_beams = None,
-            temperature = None,
-            top_k = None,
-            top_p = None,
+            do_sample=None,
+            early_stopping=None,
+            num_beams=None,
+            temperature=None,
+            top_k=None,
+            top_p=None,
             use_cache=None,
             num_beam_groups=None,
             diversity_penalty=None,
@@ -652,7 +666,6 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             else:
                 generated_list = []
                 for i in range(num_return_sequences):
-
                     generated_list.append(torch.squeeze(
                         self.sample(
                             input_ids,
@@ -666,13 +679,14 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
                     )
 
                 print(f"Generated list: {generated_list}")
-                generated_tensor = pad_sequence(generated_list, batch_first=True, padding_value=PAD_VALUE)
+                generated_tensor = pad_sequence(generated_list, batch_first=True,
+                                                padding_value=self.config.generator.pad_token_id)
 
                 print(f"Generated tensor: {generated_tensor}")
                 return generated_tensor
 
         elif is_beam_gen_mode:
-            
+
             length_penalty = length_penalty if length_penalty is not None else self.config.length_penalty
             early_stopping = early_stopping if early_stopping is not None else self.config.early_stopping
             if num_return_sequences > num_beams:
@@ -757,6 +771,396 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
                 **model_kwargs,
             )
 
+    def sample(
+        self,
+        input_ids: torch.LongTensor,
+        logits_processor: Optional[LogitsProcessorList] = None,
+        logits_warper: Optional[LogitsProcessorList] = None,
+        max_length: Optional[int] = None,
+        pad_token_id: Optional[int] = None,
+        eos_token_id: Optional[int] = None,
+        **model_kwargs
+    ):
+        """ This is the parent Huggingface method but overloaded to replace softmax with entmax.
+        """
+        # init values
+        logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
+        logits_warper = logits_warper if logits_warper is not None else LogitsProcessorList()
+        max_length = max_length if max_length is not None else self.config.max_length
+        pad_token_id = pad_token_id if pad_token_id is not None else self.config.pad_token_id
+        eos_token_id = eos_token_id if eos_token_id is not None else self.config.eos_token_id
+
+        # init sequence length tensors
+        sequence_lengths, unfinished_sequences, cur_len = self._init_sequence_length_for_generation(
+            input_ids, max_length
+        )
+
+        # auto-regressive generation
+        while cur_len < max_length:
+            # prepare model inputs
+            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+
+            # forward pass to get next token
+            outputs = self(**model_inputs, return_dict=True)
+            next_token_logits = outputs.logits[:, -1, :]
+
+            # pre-process distribution
+            scores = logits_processor(input_ids, next_token_logits)
+            scores = logits_warper(input_ids, scores)
+
+            # sample
+            if not self.config.entmax:
+                probs = F.softmax(scores, dim=-1)
+            else:
+                probs =  entmax15(scores, dim=-1, k=self.config.entmax_k)
+
+            next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)
+
+            # add code that transfomers next_tokens to tokens_to_add
+            if eos_token_id is not None:
+                assert pad_token_id is not None, "If eos_token_id is defined, make sure that pad_token_id is defined."
+                next_tokens = next_tokens * unfinished_sequences + (pad_token_id) * (1 - unfinished_sequences)
+
+            # add token and increase length by one
+            input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
+            cur_len = cur_len + 1
+
+            # update sequence length
+            if eos_token_id is not None:
+                sequence_lengths, unfinished_sequences = self._update_seq_length_for_generation(
+                    sequence_lengths, unfinished_sequences, cur_len, next_tokens == eos_token_id
+                )
+
+            # stop when there is a </s> in each sentence, or if we exceed the maximul length
+            if unfinished_sequences.max() == 0:
+                break
+
+            # update model kwargs
+            model_kwargs = self._update_model_kwargs_for_generation(
+                outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
+            )
+
+        return input_ids
+
+    def beam_search(
+            self,
+            input_ids: torch.LongTensor,
+            beam_scorer: BeamScorer,
+            logits_processor: Optional[LogitsProcessorList] = None,
+            max_length: Optional[int] = None,
+            pad_token_id: Optional[int] = None,
+            eos_token_id: Optional[int] = None,
+            **model_kwargs
+    ):
+        """  This is the parent Huggingface method but overloaded to replace softmax with entmax.
+        """
+
+        # init values
+        logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
+        max_length = max_length if max_length is not None else self.config.max_length
+        pad_token_id = pad_token_id if pad_token_id is not None else self.config.pad_token_id
+        eos_token_id = eos_token_id if eos_token_id is not None else self.config.eos_token_id
+
+        batch_size = len(beam_scorer._beam_hyps)
+        num_beams = beam_scorer.num_beams
+
+        batch_beam_size, cur_len = input_ids.shape
+
+        assert (
+                num_beams * batch_size == batch_beam_size
+        ), "Batch dimension of `input_ids` should be {num_beams * batch_size}, but is {batch_beam_size}."
+
+        beam_scores = torch.zeros((batch_size, num_beams), dtype=torch.float, device=input_ids.device)
+        beam_scores[:, 1:] = -1e9
+        beam_scores = beam_scores.view((batch_size * num_beams,))
+
+        while cur_len < max_length:
+            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+
+            outputs = self(**model_inputs, return_dict=True)
+            next_token_logits = outputs.logits[:, -1, :]
+
+            # adjust tokens for Bart, *e.g.*
+            next_token_logits = self.adjust_logits_during_generation(
+                next_token_logits, cur_len=cur_len, max_length=max_length
+            )
+
+            if not self.config.entmax:
+                next_token_scores = F.log_softmax(next_token_logits, dim=-1)  # (batch_size * num_beams, vocab_size)
+            else:
+                next_token_scores =  torch.log(entmax15(next_token_logits, dim=-1, k=self.config.entmax_k))
+
+
+            next_token_scores = logits_processor(input_ids, next_token_scores)
+            next_token_scores = next_token_scores + beam_scores[:, None].expand_as(next_token_scores)
+            # reshape for beam search
+            vocab_size = next_token_scores.shape[-1]
+            next_token_scores = next_token_scores.view(batch_size, num_beams * vocab_size)
+
+            next_token_scores, next_tokens = torch.topk(
+                next_token_scores, 2 * num_beams, dim=1, largest=True, sorted=True
+            )
+
+            next_indices = next_tokens // vocab_size
+            next_tokens = next_tokens % vocab_size
+
+            # stateless
+            beam_outputs = beam_scorer.process(
+                input_ids,
+                next_token_scores,
+                next_tokens,
+                next_indices,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
+            )
+            beam_scores = beam_outputs["next_beam_scores"]
+            beam_next_tokens = beam_outputs["next_beam_tokens"]
+            beam_idx = beam_outputs["next_beam_indices"]
+
+            input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
+            cur_len = cur_len + 1
+
+            model_kwargs = self._update_model_kwargs_for_generation(
+                outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
+            )
+            if model_kwargs["past"] is not None:
+                model_kwargs["past"] = self._reorder_cache(model_kwargs["past"], beam_idx)
+
+            if beam_scorer.is_done:
+                break
+
+        decoded = beam_scorer.finalize(
+            input_ids, beam_scores, next_tokens, next_indices, pad_token_id=pad_token_id, eos_token_id=eos_token_id
+        )
+
+        return decoded
+
+    def beam_sample(
+            self,
+            input_ids: torch.LongTensor,
+            beam_scorer: BeamScorer,
+            logits_processor: Optional[LogitsProcessorList] = None,
+            logits_warper: Optional[LogitsProcessorList] = None,
+            max_length: Optional[int] = None,
+            pad_token_id: Optional[int] = None,
+            eos_token_id: Optional[int] = None,
+            **model_kwargs
+    ):
+        """  This is the parent Huggingface method but overloaded to replace softmax with entmax.
+        """
+
+        # init values
+        logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
+        max_length = max_length if max_length is not None else self.config.max_length
+        pad_token_id = pad_token_id if pad_token_id is not None else self.config.pad_token_id
+        eos_token_id = eos_token_id if eos_token_id is not None else self.config.eos_token_id
+
+        batch_size = len(beam_scorer._beam_hyps)
+        num_beams = beam_scorer.num_beams
+
+        batch_beam_size, cur_len = input_ids.shape
+
+        beam_scores = torch.zeros((batch_size, num_beams), dtype=torch.float, device=input_ids.device)
+        beam_scores = beam_scores.view((batch_size * num_beams,))
+
+        while cur_len < max_length:
+            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+
+            outputs = self(**model_inputs, return_dict=True)
+            next_token_logits = outputs.logits[:, -1, :]
+
+            # adjust token scores (a no-op by default)
+            next_token_logits = self.adjust_logits_during_generation(
+                next_token_logits, cur_len=cur_len, max_length=max_length
+            )
+
+            if not self.config.entmax:
+                next_token_scores = F.log_softmax(next_token_logits, dim=-1)  # (batch_size * num_beams, vocab_size)
+            else:
+                next_token_scores = torch.log(entmax15(next_token_logits, dim=-1, k=self.config.entmax_k))
+
+            next_token_scores = logits_processor(input_ids, next_token_scores)
+            next_token_scores = next_token_scores + beam_scores[:, None].expand_as(next_token_scores)
+            next_token_scores = logits_warper(input_ids, next_token_scores)
+
+            # reshape for beam search
+            vocab_size = next_token_scores.shape[-1]
+            next_token_scores = next_token_scores.view(batch_size, num_beams * vocab_size)
+
+            if not self.config.entmax:
+                probs = F.softmax(next_token_scores, dim=-1)
+            else:
+                probs = entmax15(next_token_scores, dim=-1, k=self.config.entmax_k)
+
+            next_tokens = torch.multinomial(probs, num_samples=2 * num_beams)
+            next_token_scores = torch.gather(next_token_scores, -1, next_tokens)
+
+            next_token_scores, _indices = torch.sort(next_token_scores, descending=True, dim=1)
+            next_tokens = torch.gather(next_tokens, -1, _indices)
+
+            next_indices = next_tokens // vocab_size
+            next_tokens = next_tokens % vocab_size
+
+            # stateless
+            beam_outputs = beam_scorer.process(
+                input_ids,
+                next_token_scores,
+                next_tokens,
+                next_indices,
+                pad_token_id=pad_token_id,
+                eos_token_id=eos_token_id,
+            )
+            beam_scores = beam_outputs["next_beam_scores"]
+            beam_next_tokens = beam_outputs["next_beam_tokens"]
+            beam_idx = beam_outputs["next_beam_indices"]
+
+            input_ids = torch.cat([input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
+            cur_len = cur_len + 1
+
+            model_kwargs = self._update_model_kwargs_for_generation(
+                outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
+            )
+            if model_kwargs["past"] is not None:
+                model_kwargs["past"] = self._reorder_cache(model_kwargs["past"], beam_idx)
+
+            if beam_scorer.is_done:
+                break
+
+        decoded = beam_scorer.finalize(
+            input_ids, beam_scores, next_tokens, next_indices, pad_token_id=pad_token_id, eos_token_id=eos_token_id
+        )
+
+        return decoded
+
+    def group_beam_search(
+            self,
+            input_ids: torch.LongTensor,
+            beam_scorer: BeamScorer,
+            logits_processor: Optional[LogitsProcessorList] = None,
+            max_length: Optional[int] = None,
+            pad_token_id: Optional[int] = None,
+            eos_token_id: Optional[int] = None,
+            **model_kwargs
+    ):
+        """  This is the parent Huggingface method but overloaded to replace softmax with entmax.
+        """
+
+        # init values
+        logits_processor = logits_processor if logits_processor is not None else LogitsProcessorList()
+        max_length = max_length if max_length is not None else self.config.max_length
+        pad_token_id = pad_token_id if pad_token_id is not None else self.config.pad_token_id
+        eos_token_id = eos_token_id if eos_token_id is not None else self.config.eos_token_id
+
+        batch_size = len(beam_scorer._beam_hyps)
+        num_beams = beam_scorer.num_beams
+        num_beam_groups = beam_scorer.num_beam_groups
+        num_sub_beams = num_beams // num_beam_groups
+        device = input_ids.device
+
+        batch_beam_size, cur_len = input_ids.shape
+
+        assert (
+                num_beams * batch_size == batch_beam_size
+        ), f"Batch dimension of `input_ids` should be {num_beams * batch_size}, but is {batch_beam_size}."
+
+        beam_scores = torch.full((batch_size, num_beams), -1e9, dtype=torch.float, device=device)
+        # initialise score of first beam of each group with 0 and the rest with 1e-9. This ensures that the beams in
+        # the same group don't produce same tokens everytime.
+        beam_scores[:, ::num_sub_beams] = 0
+        beam_scores = beam_scores.view((batch_size * num_beams,))
+
+        while cur_len < max_length:
+            # predicted tokens in cur_len step
+            current_tokens = torch.zeros(batch_size * num_beams, dtype=input_ids.dtype, device=device)
+
+            # indices which will form the beams in the next time step
+            reordering_indices = torch.zeros(batch_size * num_beams, dtype=torch.long, device=device)
+
+            # do one decoder step on all beams of all sentences in batch
+            model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
+            outputs = self(**model_inputs, return_dict=True)
+
+            for beam_group_idx in range(num_beam_groups):
+                group_start_idx = beam_group_idx * num_sub_beams
+                group_end_idx = min(group_start_idx + num_sub_beams, num_beams)
+                group_size = group_end_idx - group_start_idx
+
+                # indices of beams of current group among all sentences in batch
+                batch_group_indices = []
+                for batch_idx in range(batch_size):
+                    batch_group_indices.extend(
+                        [batch_idx * num_beams + idx for idx in range(group_start_idx, group_end_idx)]
+                    )
+                group_input_ids = input_ids[batch_group_indices]
+
+                # select outputs of beams of current group only
+                next_token_logits = outputs.logits[batch_group_indices, -1, :]
+
+                # adjust tokens for Bart, *e.g.*
+                next_token_logits = self.adjust_logits_during_generation(
+                    next_token_logits, cur_len=cur_len, max_length=max_length
+                )
+
+                next_token_scores = F.log_softmax(next_token_logits, dim=-1)  # (batch_size * group_size, vocab_size)
+                vocab_size = next_token_scores.shape[-1]
+
+                next_token_scores = logits_processor(
+                    group_input_ids, next_token_scores, current_tokens=current_tokens, beam_group_idx=beam_group_idx
+                )
+                next_token_scores = next_token_scores + beam_scores[batch_group_indices].unsqueeze(-1).expand_as(
+                    next_token_scores
+                )
+                # reshape for beam search
+
+                next_token_scores = next_token_scores.view(batch_size, group_size * vocab_size)
+
+                next_token_scores, next_tokens = torch.topk(
+                    next_token_scores, 2 * group_size, dim=1, largest=True, sorted=True
+                )
+
+                next_indices = next_tokens // vocab_size
+                next_tokens = next_tokens % vocab_size
+
+                # stateless
+                beam_outputs = beam_scorer.process(
+                    group_input_ids,
+                    next_token_scores,
+                    next_tokens,
+                    next_indices,
+                    pad_token_id=pad_token_id,
+                    eos_token_id=eos_token_id,
+                )
+                beam_scores[batch_group_indices] = beam_outputs["next_beam_scores"]
+                beam_next_tokens = beam_outputs["next_beam_tokens"]
+                beam_idx = beam_outputs["next_beam_indices"]
+
+                input_ids[batch_group_indices] = group_input_ids[beam_idx]
+                group_input_ids = torch.cat([group_input_ids[beam_idx, :], beam_next_tokens.unsqueeze(-1)], dim=-1)
+                current_tokens[batch_group_indices] = group_input_ids[:, -1]
+
+                # (beam_idx // group_size) -> batch_idx
+                # (beam_idx % group_size) -> offset of idx inside the group
+                reordering_indices[batch_group_indices] = (
+                        num_beams * (beam_idx // group_size) + group_start_idx + (beam_idx % group_size)
+                )
+
+            model_kwargs = self._update_model_kwargs_for_generation(
+                outputs, model_kwargs, is_encoder_decoder=self.config.is_encoder_decoder
+            )
+            if model_kwargs["past"] is not None:
+                model_kwargs["past"] = self._reorder_cache(model_kwargs["past"], reordering_indices)
+
+            input_ids = torch.cat([input_ids, current_tokens.unsqueeze(-1)], dim=-1)
+            cur_len = cur_len + 1
+            if beam_scorer.is_done:
+                break
+
+        decoded = beam_scorer.finalize(
+            input_ids, beam_scores, next_tokens, next_indices, pad_token_id=pad_token_id, eos_token_id=eos_token_id
+        )
+
+        return decoded
+
     def get_input_embeddings(self):
         return self.rag.generator.get_input_embeddings()
 
@@ -774,3 +1178,4 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         shifted_input_ids[:, 1:] = input_ids[:, :-1].clone()
         shifted_input_ids[:, 0] = start_token_id
         return shifted_input_ids
+

@@ -35,7 +35,7 @@ class RagFragmentsGenerationPredictor(Predictor):
         self._min_length = int(os.getenv("MIN_LENGTH", default=20))
         self._max_length = int(os.getenv("MIN_LENGTH", default=128))
         self._repetition_penalty = float(os.getenv("REPETITION_PENALTY", default=1.0))
-        self._num_return_sequences = int(os.getenv("NUM_RETURN_SEQUENCES", default=10))
+        self._num_return_sequences = int(os.getenv("NUM_RETURN_SEQUENCES", default=1))
         self._no_repeat_ngram_size = int(os.getenv("NO_REPEAT_NGRAM_SIZE", default=4))
         self._num_beams = int(os.getenv("NUM_BEAMS", default=1))
         self._num_beam_groups = int(os.getenv("NUM_BEAM_GROUPS", default=1))
@@ -47,6 +47,12 @@ class RagFragmentsGenerationPredictor(Predictor):
         self._length_penalty = float(os.getenv("LENGTH_PENALTY", default=1.0))
         self._diversity_penalty = float(os.getenv("DIVERSITY_PENALTY", default=0.5))
         self._do_sample = parse_bool(os.getenv("DO_SAMPLE", default="True"))
+
+        entmax = parse_bool(os.getenv("ENTMAX", default="False"))
+        self._model.model.config.entmax = entmax
+
+        entmax_k = int(os.getenv("ENTMAX_K", default=512))
+        self._model.model.config.entmax_k = entmax_k
 
     def predict(self, sentences: List[str] = None,  text: str = None, passage: str = None) -> JsonDict:
 
@@ -113,6 +119,8 @@ class RagFragmentsGenerationPredictor(Predictor):
                             next_passage["alternatives"] = generated
                         generated = choice(generated)
 
+                    self._model.add_to_memory(generated["text"], add_to_memory=self._add_to_memory)
+
                     next_passage["seq_num"] = i + j
                     next_passage["text"] = generated["text"]
 
@@ -124,6 +132,8 @@ class RagFragmentsGenerationPredictor(Predictor):
             elif self._add_to_memory:
                 print(f"Add to memory: {sentences_joined}")
                 self._model.add_to_memory(sentences_joined,  add_to_memory=self._add_to_memory)
+
+        self._model.clear_memory()
 
         return results
 

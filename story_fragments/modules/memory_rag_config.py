@@ -56,8 +56,11 @@ class RagMemoryConfig(RagConfig):
             memory_lru: bool = True,
             combined_n_docs: int = 5,
             context_encoder: str = "facebook/dpr-ctx_encoder-multiset-base",
-            unlikelihood_ratio: float = 0.0,
+            unlikelihood_ratio: float = 1.0,
             unlikelihood_beta: float = 0.5,
+            entmax: bool = False,
+            entmax_k: int = 512,
+            memory_retrieval_weighting: float = 1.0,
             **kwargs
     ):
         super().__init__(
@@ -99,3 +102,6 @@ class RagMemoryConfig(RagConfig):
         self.context_encoder = context_encoder
         self.unlikelihood_ratio = unlikelihood_ratio
         self.unlikelihood_beta = unlikelihood_beta
+        self.entmax = entmax
+        self.entmax_k = entmax_k
+        self.memory_retrieval_weighting = memory_retrieval_weighting
