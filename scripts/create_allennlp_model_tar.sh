@@ -1,4 +1,4 @@
-#!/usr/bin/env
+echo "Making model.tar.gz from model in ${SERIALIZATION_DIR}"
 
 SERIALIZATION_DIR=${SERIALIZATION_DIR}
 WEIGHTS_TH="best.th"
