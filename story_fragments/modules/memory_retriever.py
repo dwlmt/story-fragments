@@ -84,7 +84,7 @@ class CanonicalMemoryHFIndex(CanonicalHFIndex):
                  index_name,
                  index_path,
                  use_dummy_dataset):
-        super().__init__(vector_size, vector_size=vector_size, dataset_name=dataset_name, dataset_split=dataset_split,
+        super().__init__(vector_size=vector_size, dataset_name=dataset_name, dataset_split=dataset_split,
                          index_name=index_name, index_path=index_path, use_dummy_dataset=use_dummy_dataset)
 
     def get_doc_dicts(self, doc_ids: np.ndarray) -> List[dict]:

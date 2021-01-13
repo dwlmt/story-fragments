@@ -21,7 +21,7 @@ from __future__ import absolute_import, division, print_function
 import glob
 import os
 import pathlib
-from random import Random
+from random import Random, random, shuffle
 import datasets
 from datasets.info import SupervisedKeysData
 
@@ -400,7 +400,7 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
 
         if self.config.shuffle:
             # Fix using the default Allennlp random seed.
-            Random(13370).shuffle(book_files)
+            shuffle(book_files)
         else:
             book_files = sorted(book_files)
 

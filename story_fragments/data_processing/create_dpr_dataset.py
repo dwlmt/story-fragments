@@ -31,7 +31,9 @@ def embed(examples: dict, ctx_encoder: DPRContextEncoder, ctx_tokenizer: DPRCont
 
 class ProcessDPRDataset(object):
 
-    def create(self, datasets: List[str], base_output_dir, dataset_name,
+    def create(self, datasets: List[str],
+               base_output_dir,
+               dataset_name,
                window_size: int = 4,
                window_step=2,
                batch_size=16,
@@ -103,7 +105,7 @@ class ProcessDPRDataset(object):
 
             with jsonlines.open(dataset) as reader:
                 for obj in reader:
-                    # print(f"{obj['title']} - {obj['text']}")
+                    print(f"{obj['title']} - {obj['text']}")
 
                     sentences = text_to_sentences(f"{obj['text']}").split('\n')
                     passages = more_itertools.windowed(sentences, n=window_size, step=window_step, fillvalue=" ")

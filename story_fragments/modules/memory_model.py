@@ -410,6 +410,13 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             entmax_loss = Entmax15Loss(k=self.config.entmax_k, ignore_index=self.config.pad_token_id, reduction="sum")
             target = torch.squeeze(target, dim=2)
 
+            #logits = - rag_logprobs
+            #logits_sum = torch.sum(logits, dim=-1, keepdim=True)
+            #n = logits.size()[-1]
+
+            #logits = logits - (logits_sum / n)
+            
+            #print(f"Logits: {torch.exp(rag_logprobs)}")
             loss = entmax_loss(torch.exp(rag_logprobs).view(rag_logprobs.size()[0] * rag_logprobs.size()[1], -1),
                                target.view(target.size()[0] * target.size()[1]))
             return loss
@@ -481,9 +488,14 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         # print(f"Seq Logits: {seq_logits.size()}")
 
         # RAG-token marginalization
+        #if not self.config.entmax:
         seq_logprobs = torch.nn.functional.log_softmax(seq_logits, dim=-1).view(
             seq_logits.shape[0] // n_docs, n_docs, -1, seq_logits.size(-1)
         )
+        #else:
+        #    seq_logprobs  = torch.log(entmax15(seq_logits, dim=-1, k=self.config.entmax_k)).view(
+        #        seq_logits.shape[0] // n_docs, n_docs, -1, seq_logits.size(-1))
+
         doc_logprobs = torch.log_softmax(doc_scores, dim=1)
         log_prob_sum = seq_logprobs + doc_logprobs.unsqueeze(-1).unsqueeze(-1)
         return torch.logsumexp(log_prob_sum, dim=1)

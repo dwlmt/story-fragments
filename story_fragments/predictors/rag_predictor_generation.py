@@ -48,11 +48,6 @@ class RagFragmentsGenerationPredictor(Predictor):
         self._diversity_penalty = float(os.getenv("DIVERSITY_PENALTY", default=0.5))
         self._do_sample = parse_bool(os.getenv("DO_SAMPLE", default="True"))
 
-        entmax = parse_bool(os.getenv("ENTMAX", default="False"))
-        self._model.model.config.entmax = entmax
-
-        entmax_k = int(os.getenv("ENTMAX_K", default=512))
-        self._model.model.config.entmax_k = entmax_k
 
     def predict(self, sentences: List[str] = None,  text: str = None, passage: str = None) -> JsonDict:
 

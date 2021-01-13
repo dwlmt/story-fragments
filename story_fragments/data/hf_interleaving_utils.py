@@ -8,19 +8,23 @@ import numpy
 import textattack
 from blingfire import text_to_sentences
 from datasets import logger
+
+'''
 from nltk.corpus import wordnet
 from textattack.augmentation import Augmenter
 from textattack.constraints.pre_transformation import StopwordModification, RepeatModification
 from textattack.transformations import CompositeTransformation, WordSwapRandomCharacterDeletion, WordSwapQWERTY, \
     WordSwapWordNet, WordSwap, RandomSwap, WordDeletion
+'''
 
 from story_fragments.data.contraction_utils import CONTRACTIONS_LIST
 
+'''
 TRANSFORMATIONS_PER_EXAMPLE = 2
 
 PCT_WORDS_TO_SWAP = 0.15
 
-_RE_COMBINE_WHITESPACE = re.compile(r"\s+")
+
 
 class WordSwapAntonymWordNet(WordSwap):
     """Transforms an input by replacing its words with antonyms provided by
@@ -47,13 +51,15 @@ class WordSwapAntonymWordNet(WordSwap):
                         antonyms.add(syn_word.antonyms()[0].name())
         return list(antonyms)
 
-'''
+
 constraints = [RepeatModification(), StopwordModification()]
 # Create augmenter with specified parameters
 antonym_augmenter = Augmenter(transformation=WordSwapAntonymWordNet(), constraints=constraints, pct_words_to_swap=PCT_WORDS_TO_SWAP, transformations_per_example=TRANSFORMATIONS_PER_EXAMPLE)
 random_swap_augmenter = Augmenter(transformation=RandomSwap(), pct_words_to_swap=PCT_WORDS_TO_SWAP, transformations_per_example=TRANSFORMATIONS_PER_EXAMPLE)
 deletion_augmenter = Augmenter(transformation=WordDeletion(), pct_words_to_swap=PCT_WORDS_TO_SWAP, transformations_per_example=TRANSFORMATIONS_PER_EXAMPLE)
 '''
+
+_RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
 def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
                         label_size: int = 1, step_size: int = 1,
