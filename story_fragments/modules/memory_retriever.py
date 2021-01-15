@@ -20,7 +20,7 @@ from typing import List, Tuple
 
 import numpy as np
 from more_itertools import chunked
-from transformers import logger, BatchEncoding
+from transformers import BatchEncoding
 from transformers.models.rag.retrieval_rag import RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CustomHFIndex, CanonicalHFIndex
 from transformers.utils import logging
 
