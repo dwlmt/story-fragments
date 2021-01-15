@@ -1,7 +1,5 @@
 import os
 import random
-from functools import partial
-from random import randint
 from typing import Dict, Iterable
 
 from allennlp.data import DatasetReader, Instance
@@ -9,8 +7,6 @@ from allennlp.data.fields import MetadataField, TextField
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from datasets import load_dataset
-
-from story_fragments.data.hf_interleaving_utils import add_negative_examples
 
 
 class GlobCorpusInterleavedReader(DatasetReader):
@@ -45,7 +41,7 @@ class GlobCorpusInterleavedReader(DatasetReader):
             test_split (int): % test split.
             **kwargs:
         """
-        super().__init__(lazy=lazy,  max_instances=max_instances)
+        super().__init__(lazy=lazy, max_instances=max_instances)
         self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
                                                                   max_length=generator_max_length,
                                                                   add_special_tokens=add_special_tokens,
@@ -174,7 +170,6 @@ class BookCorpusInterleavedReader(GlobCorpusInterleavedReader):
                  validation_split: int = 10,
                  test_split: int = 10,
                  **kwargs):
-
         super(BookCorpusInterleavedReader, self).__init__(generator_model_name=generator_model_name,
                                                           generator_max_length=generator_max_length,
                                                           encoder_model_name=encoder_model_name,
@@ -203,17 +198,17 @@ class SchmoopCorpusInterleavedReader(GlobCorpusInterleavedReader):
                  validation_split: int = 10,
                  test_split: int = 10,
                  **kwargs):
-
         super(SchmoopCorpusInterleavedReader, self).__init__(generator_model_name=generator_model_name,
-                                                          generator_max_length=generator_max_length,
-                                                          encoder_model_name=encoder_model_name,
-                                                          encoder_max_length=encoder_max_length,
-                                                          add_special_tokens=add_special_tokens,
-                                                          train_split=train_split,
-                                                          validation_split=validation_split,
-                                                          test_split=test_split,
-                                                          **kwargs
-                                                          )
+                                                             generator_max_length=generator_max_length,
+                                                             encoder_model_name=encoder_model_name,
+                                                             encoder_max_length=encoder_max_length,
+                                                             add_special_tokens=add_special_tokens,
+                                                             train_split=train_split,
+                                                             validation_split=validation_split,
+                                                             test_split=test_split,
+                                                             **kwargs
+                                                             )
+
 
 @DatasetReader.register('moviecorpus-interleaved')
 class MovieCorpusInterleavedReader(GlobCorpusInterleavedReader):
@@ -231,15 +226,13 @@ class MovieCorpusInterleavedReader(GlobCorpusInterleavedReader):
                  validation_split: int = 10,
                  test_split: int = 10,
                  **kwargs):
-
         super(MovieCorpusInterleavedReader, self).__init__(generator_model_name=generator_model_name,
-                                                          generator_max_length=generator_max_length,
-                                                          encoder_model_name=encoder_model_name,
-                                                          encoder_max_length=encoder_max_length,
-                                                          add_special_tokens=add_special_tokens,
-                                                          train_split=train_split,
-                                                          validation_split=validation_split,
-                                                          test_split=test_split,
-                                                          **kwargs
-                                                          )
-
+                                                           generator_max_length=generator_max_length,
+                                                           encoder_model_name=encoder_model_name,
+                                                           encoder_max_length=encoder_max_length,
+                                                           add_special_tokens=add_special_tokens,
+                                                           train_split=train_split,
+                                                           validation_split=validation_split,
+                                                           test_split=test_split,
+                                                           **kwargs
+                                                           )

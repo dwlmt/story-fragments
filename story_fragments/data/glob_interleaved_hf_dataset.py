@@ -21,11 +21,11 @@ from __future__ import absolute_import, division, print_function
 import glob
 import os
 import pathlib
-from random import Random, random, shuffle
+from random import shuffle
+
 import datasets
 from datasets.info import SupervisedKeysData
 
-import story_fragments.data.hf_interleaving_utils
 from story_fragments.data.hf_interleaving_utils import interleave_examples
 
 _DESCRIPTION = """\
@@ -236,15 +236,6 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        data_url=_BOOK_CORPUS_URL,
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
                                        version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="schmoop_context_4_label_4_step_4b",
-                                       description="Schmoop with 4 sentence steps.",
-                                       input_size=4,
-                                       target_size=4,
-                                       step_size=4,
-                                       shuffle=False,
-                                       data_url=_BOOK_CORPUS_URL,
-                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="schmoop_context_6_label_6_step_6_neg",
                                        description="Schmoop with 6 sentence steps.",
                                        input_size=6,
@@ -265,24 +256,6 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
                                        version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="schmoop_context_6_label_6_step_6",
-                                       description="Schmoop with 6 sentence steps.",
-                                       input_size=6,
-                                       target_size=6,
-                                       step_size=6,
-                                       shuffle=False,
-                                       data_url=_BOOK_CORPUS_URL,
-                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="schmoop_context_6_label_6_step_6b",
-                                       description="Schmoop with 6 sentence steps.",
-                                       input_size=6,
-                                       target_size=6,
-                                       step_size=6,
-                                       shuffle=False,
-                                       data_url=_BOOK_CORPUS_URL,
-                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="schmoop_context_6_label_6_step_6c",
                                        description="Schmoop with 6 sentence steps.",
                                        input_size=6,
                                        target_size=6,
@@ -360,23 +333,7 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        step_size=6,
                                        data_url=_MOVIE_CORPUS_URL,
                                        glob_path=_MOVIE_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="moviecorpus_context_6_label_6_step_6b",
-                                       description="Movie script with 6 sentence steps.",
-                                       input_size=6,
-                                       target_size=6,
-                                       step_size=6,
-                                       data_url=_MOVIE_CORPUS_URL,
-                                       glob_path=_MOVIE_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="moviecorpus_context_6_label_6_step_6c",
-                                       description="Movie script with 6 sentence steps.",
-                                       input_size=6,
-                                       target_size=6,
-                                       step_size=6,
-                                       data_url=_MOVIE_CORPUS_URL,
-                                       glob_path=_MOVIE_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
+                                       version=_VERSION)
 
     ]
 

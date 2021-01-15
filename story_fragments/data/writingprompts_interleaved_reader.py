@@ -1,7 +1,6 @@
 import logging
 import os
 import random
-from functools import partial
 from typing import Dict, Iterable
 
 from allennlp.data import DatasetReader, Instance
@@ -9,8 +8,6 @@ from allennlp.data.fields import TextField, MetadataField
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from datasets import load_dataset
-
-from story_fragments.data.hf_interleaving_utils import add_negative_examples
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +57,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
             "tokens": PretrainedTransformerIndexer(model_name=encoder_model_name, max_length=encoder_max_length,
                                                    )}
 
-        self.search_negative_labels =  search_negative_labels
+        self.search_negative_labels = search_negative_labels
         self.k_nearest = k_nearest
 
         self.manual_shards = manual_shards
@@ -70,7 +67,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
         fields = {}
 
         fields["metadata"] = MetadataField(example)
-        #logger.info(f"Example: {example}")
+        # logger.info(f"Example: {example}")
 
         tokens = self.encoder_tokenizer.tokenize(example['text'])
 
@@ -129,13 +126,14 @@ class WritingPromptsInterleavedReader(DatasetReader):
 
         for i, example in enumerate(dataset):
 
-            #if self.seen[file_path] == 0 and i == 10000:
+            # if self.seen[file_path] == 0 and i == 10000:
             #    break
 
             if self.search_negative_labels:
                 try:
                     label = example["label"]
-                    neg_examples = dataset.get_nearest_examples("label", label, k=1 + self.k_nearest).examples['label'][1:]
+                    neg_examples = dataset.get_nearest_examples("label", label, k=1 + self.k_nearest).examples['label'][
+                                   1:]
                     example["negative_labels"].extend(neg_examples)
                 except Exception as e:
                     print(f"Failed retrieval: {e}")

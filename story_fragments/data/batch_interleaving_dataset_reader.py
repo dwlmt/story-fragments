@@ -1,5 +1,5 @@
-from typing import Dict, Mapping, Iterable
 import json
+from typing import Dict, Mapping, Iterable
 
 from allennlp.common.checks import ConfigurationError
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
@@ -32,11 +32,11 @@ class InterleavingBatchDatasetReader(DatasetReader):
     """
 
     def __init__(
-        self,
-        readers: Dict[str, DatasetReader],
-        dataset_field_name: str = "dataset",
-        batch_size: int = 16,
-        **kwargs,
+            self,
+            readers: Dict[str, DatasetReader],
+            dataset_field_name: str = "dataset",
+            batch_size: int = 16,
+            **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         self._readers = readers
@@ -75,7 +75,6 @@ class InterleavingBatchDatasetReader(DatasetReader):
         datasets = {key: reader.read(file_paths[key]) for key, reader in self._readers.items()}
 
         yield from self._read_batch_at_once(datasets)
-        
 
     def text_to_instance(self) -> Instance:  # type: ignore
 

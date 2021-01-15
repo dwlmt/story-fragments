@@ -4,11 +4,8 @@ import re
 from collections import deque
 
 import more_itertools
-import numpy
-import textattack
 from blingfire import text_to_sentences
 from datasets import logger
-from nltk.corpus import wordnet
 
 '''
 from nltk.corpus import wordnet
@@ -60,11 +57,12 @@ deletion_augmenter = Augmenter(transformation=WordDeletion(), pct_words_to_swap=
 
 _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
+
 def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
                         label_size: int = 1, step_size: int = 1,
                         dummy: bool = False,
                         dummy_max_examples: int = 10000,
-                        contractions: bool= False,
+                        contractions: bool = False,
                         add_negative_examples: bool = False):
     """ Interleaves epsiodes examples, processes and returns as as dict.
 
@@ -75,6 +73,7 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
         label_size (int):  Size in sentences of the 'target_text' field.
         step_size (int):  Sliding window step.
     """
+
     # Iterate over a batch of the input_text.
 
     def read_episode(episode, id):
@@ -125,33 +124,33 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
 
             if add_negative_examples:
 
-                #c = random.randint(1, 100)
+                # c = random.randint(1, 100)
 
-                #if c < 40:
+                # if c < 40:
 
                 if i > 0:
                     prev_list = windowed_sentences[max(0, i - 10): i]
-                    #print(f"{prev_list}")
+                    # print(f"{prev_list}")
                     if len(prev_list) > 1:
                         example = random.choice(prev_list)
-                        #print(f"{example}")
+                        # print(f"{example}")
                         neg_label_text = example[-label_size:]
                         negative_labels.append(" ".join(neg_label_text))
 
                 if i < len(windowed_sentences) - 1:
                     fut_list = windowed_sentences[i + 1: min(len(windowed_sentences), i + 11)]
                     if len(fut_list) > 1:
-                        #print(f"{fut_list}")
+                        # print(f"{fut_list}")
                         example = random.choice(fut_list)
-                        #print(f"{example}")
+                        # print(f"{example}")
                         neg_label_text = example[-label_size:]
                         negative_labels.append(" ".join(neg_label_text))
 
-                #elif c < 60:
+                # elif c < 60:
 
                 if step_size > 1:
                     for i in range(2):
-                        #print(f"{label_text}")
+                        # print(f"{label_text}")
                         shuffled_text = list(copy.deepcopy(label_text))
                         random.shuffle(shuffled_text)
                         negative_labels.append(" ".join(shuffled_text))
@@ -185,11 +184,10 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
                 "episode_done": False if i < len(windowed_sentences) - 1 else True,
                 "episode_begun": True if i == 0 else False
             }
-         
+
             example_list.append(example)
 
         return example_list
-
 
     def iterate_over_episodes(reader):
         id_counter = 0
@@ -236,7 +234,8 @@ def add_negative_examples(example, dataset, k_nearest):
 
             print(f"Neg Examples: {neg_examples}")
 
-            extra_dict = {"added_negative_examples": True, "negative_labels": list(neg_examples) + list(example["negative_labels"]) }
+            extra_dict = {"added_negative_examples": True,
+                          "negative_labels": list(neg_examples) + list(example["negative_labels"])}
             print(f"Extra dict: {extra_dict}")
             return extra_dict
 

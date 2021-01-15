@@ -1,8 +1,5 @@
 import os
-
 import random
-from functools import partial
-from random import randint
 from typing import Dict, Iterable
 
 from allennlp.data import DatasetReader, Instance
@@ -10,8 +7,6 @@ from allennlp.data.fields import TextField, MetadataField
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
 from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from datasets import load_dataset
-
-from story_fragments.data.hf_interleaving_utils import add_negative_examples
 
 
 @DatasetReader.register('wikiplots-interleaved')
@@ -126,7 +121,6 @@ class WikiplotsInterleavedReader(DatasetReader):
         else:
             self.seen[file_path] += 1
 
-
         split_arr = file_path.split('/')
         config = split_arr[0]
         split = split_arr[1]
@@ -149,7 +143,7 @@ class WikiplotsInterleavedReader(DatasetReader):
 
         for i, example in enumerate(dataset):
 
-            #if self.seen[file_path] == 0 and i == 10000:
+            # if self.seen[file_path] == 0 and i == 10000:
             #    break
 
             if self.search_negative_labels:

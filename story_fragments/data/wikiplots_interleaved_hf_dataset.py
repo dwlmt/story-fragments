@@ -4,7 +4,6 @@ import datasets
 from datasets.info import SupervisedKeysData
 from jsonlines import jsonlines
 
-import story_fragments.data.hf_interleaving_utils
 from story_fragments.data.hf_interleaving_utils import interleave_examples
 
 _CITATION = ""
@@ -57,7 +56,7 @@ class WikiPlotsInterleavedHfDatasetConfig(datasets.BuilderConfig):
         self.step_size = step_size
         self.batch_size = batch_size
         self.dummy = dummy
-        self.add_negative_examples =  add_negative_examples
+        self.add_negative_examples = add_negative_examples
 
         super(WikiPlotsInterleavedHfDatasetConfig, self).__init__(**kwargs)
 
@@ -156,26 +155,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                             data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                             data_download_checksum=_DOWNLOAD_CHECKSUM,
                                             version=_VERSION),
-        WikiPlotsInterleavedHfDatasetConfig(name="wikiplots_context_6_label_6_step_6b",
-                                            description="Wikiplots with one sentence of context, "
-                                                        "labels and a one sentence step.",
-                                            input_size=6,
-                                            target_size=6,
-                                            step_size=6,
-                                            data_url=_URL,
-                                            data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
-                                            data_download_checksum=_DOWNLOAD_CHECKSUM,
-                                            version=_VERSION),
-        WikiPlotsInterleavedHfDatasetConfig(name="wikiplots_context_6_label_6_step_6c",
-                                            description="Wikiplots with one sentence of context, "
-                                                        "labels and a one sentence step.",
-                                            input_size=6,
-                                            target_size=6,
-                                            step_size=6,
-                                            data_url=_URL,
-                                            data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
-                                            data_download_checksum=_DOWNLOAD_CHECKSUM,
-                                            version=_VERSION),
         WikiPlotsInterleavedHfDatasetConfig(name="wikiplots_context_6_label_6_step_6_neg",
                                             description="Wikiplots with one sentence of context, "
                                                         "labels and a one sentence step.",
@@ -230,7 +209,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                 },
             )
         ]
-
 
     def _generate_examples(self, filepath, split):
         """ Yields an example for each story split by stories.

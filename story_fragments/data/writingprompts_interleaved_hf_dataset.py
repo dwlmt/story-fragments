@@ -5,9 +5,7 @@ import datasets
 from datasets.info import SupervisedKeysData
 from jsonlines import jsonlines
 
-import story_fragments.data.hf_interleaving_utils
 from story_fragments.data.hf_interleaving_utils import interleave_examples
-
 
 _VERSION = datasets.Version("1.0.0")
 
@@ -167,33 +165,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  version=_VERSION),
-        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_6_label_6_step_6b",
-                                                 description="Writing Prompts with 6 sentence steps.",
-                                                 input_size=6,
-                                                 target_size=6,
-                                                 step_size=6,
-                                                 data_url=_URL,
-                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
-                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
-                                                 version=_VERSION),
-        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_6_label_6_step_6c",
-                                                 description="Writing Prompts with 6 sentence steps.",
-                                                 input_size=6,
-                                                 target_size=6,
-                                                 step_size=6,
-                                                 data_url=_URL,
-                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
-                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
-                                                 version=_VERSION),
-        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_4_label_4_step_4b",
-                                                 description="Writing Prompts with 4 sentence steps.",
-                                                 input_size=4,
-                                                 target_size=4,
-                                                 step_size=4,
-                                                 data_url=_URL,
-                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
-                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
-                                                 version=_VERSION),
         WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_6_label_6_step_6_neg",
                                                  description="Writing Prompts with 4 sentence steps.",
                                                  input_size=6,
@@ -243,7 +214,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
             citation=_CITATION,
         )
 
-
     def _split_generators(self, dl_manager):
         """Returns splits from train,valid,test.jsonl """
 
@@ -272,7 +242,6 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                 },
             ),
         ]
-
 
     def _generate_examples(self, filepath, split):
         """ Yields an example for each story split by stories.
