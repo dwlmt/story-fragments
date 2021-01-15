@@ -1,26 +1,18 @@
 name: allennlp
 channels:
   - plotly
-  - pytorch
   - conda-forge
+  - pytorch
+  - anaconda
   - defaults
 dependencies:
   - _libgcc_mutex=0.1=main
-  - attrs=20.3.0=pyhd3deb0d_0
-  - automat=20.2.0=py_0
-  - bcrypt=3.2.0=py38h1e0a361_1
   - binutils_impl_linux-64=2.31.1=h6176602_1
   - binutils_linux-64=2.31.1=h6176602_9
   - blas=1.0=mkl
-  - brotlipy=0.7.0=py38h27cfd23_1003
-  - ca-certificates=2020.11.8=ha878542_0
-  - cffi=1.14.3=py38h261ae71_2
-  - chardet=3.0.4=py38h06a4308_1003
-  - constantly=15.1.0=py_0
-  - cryptography=3.2.1=py38h3c74f83_1
-  - cssselect=1.1.0=py_0
+  - ca-certificates=2020.12.8=h06a4308_0
   - cudatoolkit=10.1.243=h6bb024c_0
-  - faiss-cpu=v1.6.4=py3.8_ha8d69ae_0_cpu
+  - faiss-cpu=1.6.5=py3.8_h0236df7_0_cpu
   - freetype=2.10.4=h5ab3b9f_0
   - gcc_impl_linux-64=7.3.0=habb00fd_1
   - gcc_linux-64=7.3.0=h553295d_9
@@ -28,252 +20,182 @@ dependencies:
   - gfortran_linux-64=7.3.0=h553295d_9
   - gxx_impl_linux-64=7.3.0=hdf63c60_1
   - gxx_linux-64=7.3.0=h553295d_9
-  - hyperlink=20.0.1=pyh9f0ad1d_0
-  - icu=67.1=he1b5a44_0
-  - idna=2.10=py_0
-  - incremental=17.5.0=py_0
   - intel-openmp=2020.2=254
-  - itemadapter=0.2.0=pyhd8ed1ab_0
-  - itemloaders=1.0.4=pyhd8ed1ab_0
-  - jmespath=0.10.0=pyh9f0ad1d_0
   - jpeg=9b=h024ee3a_2
   - lcms2=2.11=h396b838_0
   - ld_impl_linux-64=2.33.1=h53a641e_7
   - libedit=3.1.20191231=h14c3975_1
-  - libfaiss=v1.6.4=h6bb024c_0_cpu
+  - libfaiss=1.6.5=h2bc3f7f_0_cpu
   - libffi=3.3=he6710b0_2
   - libgcc=7.2.0=h69d50b8_2
   - libgcc-ng=9.1.0=hdf63c60_0
-  - libgfortran-ng=7.5.0=hae1eefd_17
-  - libgfortran4=7.5.0=hae1eefd_17
-  - libiconv=1.16=h516909a_0
+  - libgfortran-ng=7.3.0=hdf63c60_0
   - libpng=1.6.37=hbc83047_0
-  - libstdcxx-ng=9.3.0=h2ae2ef3_17
+  - libstdcxx-ng=9.1.0=hdf63c60_0
   - libtiff=4.1.0=h2733197_1
   - libuv=1.40.0=h7b6447c_0
-  - libxml2=2.9.10=h68273f3_2
-  - libxslt=1.1.33=h572872d_1
-  - lxml=4.6.1=py38hbb43d70_0
   - lz4-c=1.9.2=heb0550a_3
   - mkl=2020.2=256
   - mkl-service=2.3.0=py38he904b0f_0
   - mkl_fft=1.2.0=py38h23d657b_0
   - mkl_random=1.1.1=py38h0573a6f_0
+  - mpi=1.0=openmpi
+  - mpi4py=3.0.3=py38hd0bea5a_0
   - ncurses=6.2=he6710b0_1
-  - numpy-base=1.19.2=py38hfa32c7d_0
   - olefile=0.46=py_0
-  - openssl=1.1.1h=h516909a_0
-  - parsel=1.6.0=py_0
-  - pillow=8.0.1=py38he98fc37_0
-  - pip=20.2.4=py38h06a4308_0
-  - plotly=4.12.0=py_0
+  - openmpi=4.0.5=hdf1f1ad_1
+  - openssl=1.1.1i=h27cfd23_0
+  - pillow=8.1.0=py38he98fc37_0
+  - pip=20.3.3=py38h06a4308_0
+  - plotly=4.14.2=py_0
   - plotly-orca=1.3.1=1
-  - protego=0.1.16=py_0
-  - pyasn1=0.4.8=py_0
-  - pyasn1-modules=0.2.7=py_0
-  - pycparser=2.20=py_2
-  - pydispatcher=2.0.5=py_1
-  - pyhamcrest=2.0.2=py_0
-  - pyopenssl=19.1.0=pyhd3eb1b0_1
-  - pysocks=1.7.1=py38h06a4308_0
   - python=3.8.5=h7579374_1
   - python_abi=3.8=1_cp38
-  - pytorch=1.7.0=py3.8_cuda10.1.243_cudnn7.6.3_0
-  - queuelib=1.5.0=pyh9f0ad1d_0
+  - pytorch=1.7.1=py3.8_cuda10.1.243_cudnn7.6.3_0
   - readline=8.0=h7b6447c_0
-  - requests=2.25.0=pyhd3eb1b0_0
   - retrying=1.3.3=py_2
-  - scrapy=2.4.1=py38h578d9bd_0
-  - service_identity=18.1.0=py_0
-  - setuptools=50.3.1=py38h06a4308_1
+  - six=1.15.0=py38h06a4308_0
   - sqlite=3.33.0=h62c20be_0
   - tk=8.6.10=hbc83047_0
-  - torchaudio=0.7.0=py38
-  - torchtext=0.8.0=py38
-  - torchvision=0.8.1=py38_cu101
-  - twisted=20.3.0=py38h1e0a361_1
+  - torchaudio=0.7.2=py38
+  - torchvision=0.8.2=py38_cu101
   - typing_extensions=3.7.4.3=py_0
-  - w3lib=1.22.0=pyh9f0ad1d_0
-  - wheel=0.35.1=pyhd3eb1b0_0
+  - wheel=0.36.2=pyhd3eb1b0_0
   - xz=5.2.5=h7b6447c_0
   - zlib=1.2.11=h7b6447c_3
-  - zope.interface=5.2.0=py38h25fe258_0
   - zstd=1.4.5=h9ceee32_0
   - pip:
-    - aiofiles==0.5.0
     - alabaster==0.7.12
-    - alembic==1.4.3
-    - allennlp==1.2.2
-    - aniso8601==7.0.0
-    - argcomplete==1.10.0
-    - async-exit-stack==1.0.1
-    - async-generator==1.10
+    - allennlp==1.3.0
+    - attrs==20.3.0
     - babel==2.9.0
-    - banal==1.0.1
-    - beautifulsoup4==4.9.1
     - bert-score==0.3.7
     - blingfire==0.1.3
-    - blis==0.4.1
-    - boto3==1.16.23
-    - botocore==1.19.23
+    - blis==0.7.4
+    - boto3==1.16.52
+    - botocore==1.19.52
     - bpemb==0.3.2
-    - bs4==0.0.1
     - catalogue==1.0.0
-    - certifi==2020.11.8
+    - certifi==2020.12.5
+    - chardet==4.0.0
     - click==7.1.2
     - cloudpickle==1.6.0
     - cycler==0.10.0
-    - cymem==2.0.4
-    - cython==0.29.21
-    - dask==2.30.0
-    - dataset==1.4.1
-    - datasets==1.1.3
+    - cymem==2.0.5
+    - dask==2020.12.0
+    - datasets==1.2.0
     - decorator==4.4.2
     - deepspeed==0.3.4+6021b70
     - deprecated==1.2.10
     - dill==0.3.3
-    - dnspython==2.0.0
     - docopt==0.6.2
     - docutils==0.16
-    - docx2txt==0.8
-    - ebooklib==0.17.1
     - editdistance==0.5.3
-    - elasticsearch==7.10.1
-    - email-validator==1.1.2
     - en-core-web-md==2.3.1
     - en-core-web-sm==2.3.1
-    - extract-msg==0.23.1
-    - fastapi==0.61.2
+    - entmax==1.0
     - filelock==3.0.12
     - fire==0.3.1
     - flair==0.6.1.post1
     - ftfy==5.8
     - future==0.18.2
-    - fuzzywuzzy==0.18.0
     - gdown==3.12.2
     - gensim==3.8.3
-    - graphene==2.1.8
-    - graphql-core==2.3.2
-    - graphql-relay==2.0.1
-    - h11==0.9.0
+    - h11==0.12.0
     - h5py==3.1.0
-    - httptools==0.1.1
     - hyperopt==0.2.5
+    - idna==2.10
     - imagesize==1.2.0
-    - imapclient==2.1.0
-    - importlib-metadata==2.0.0
     - iniconfig==1.1.1
-    - itsdangerous==1.1.0
     - janome==0.4.1
     - jinja2==2.11.2
-    - joblib==0.17.0
-    - jsonlines==1.2.0
-    - jsonnet==0.16.0
-    - jsonpickle==1.4.1
+    - jmespath==0.10.0
+    - joblib==1.0.0
+    - jsonlines==2.0.0
+    - jsonnet==0.17.0
+    - jsonpickle==1.4.2
     - kiwisolver==1.3.1
     - konoha==4.6.2
     - langdetect==1.0.8
-    - language-tool-python==2.4.7
+    - language-tool-python==2.5.0
     - lemminflect==0.2.1
+    - llvmlite==0.35.0
     - lru-dict==1.1.6
-    - mako==1.1.3
+    - lxml==4.6.2
     - markupsafe==1.1.1
     - matplotlib==3.3.3
     - more-itertools==8.6.0
     - mpld3==0.3
     - multiprocess==0.70.11.1
-    - murmurhash==1.0.4
-    - negspacy==0.1.9
+    - murmurhash==1.0.5
     - networkx==2.5
-    - neuralcoref==4.0
     - ninja==1.10.0.post2
-    - nlp==0.4.0
     - nltk==3.5
     - num2words==0.5.10
-    - numpy==1.18.5
-    - orjson==3.4.3
+    - numba==0.52.0
+    - numpy==1.19.5
     - overrides==3.1.0
-    - packaging==20.4
-    - pandas==1.1.4
-    - patsy==0.5.1
-    - pdfminer-six==20181108
+    - packaging==20.8
+    - pandas==1.2.0
     - pipreqs==0.4.10
     - plac==1.1.3
     - pluggy==0.13.1
-    - preshed==3.0.4
-    - promise==2.3
+    - preshed==3.0.5
     - protobuf==3.14.0
-    - py==1.9.0
+    - py==1.10.0
     - pyarrow==2.0.0
-    - pycryptodome==3.9.9
-    - pydantic==1.7.2
-    - pygments==2.7.2
+    - pygments==2.7.4
+    - pynndescent==0.5.1
     - pyparsing==2.4.7
-    - pytest==6.1.2
-    - pytest-mock==3.3.1
+    - pysocks==1.7.1
+    - pytest==6.2.1
+    - pytest-mock==3.5.1
     - python-dateutil==2.8.1
-    - python-editor==1.0.4
-    - python-levenshtein==0.12.0
-    - python-multipart==0.0.5
-    - python-pptx==0.6.18
-    - pytz==2020.4
+    - pytz==2020.5
     - pyyaml==5.3.1
     - regex==2020.11.13
-    - rx==1.6.1
-    - s3transfer==0.3.3
+    - requests==2.25.1
+    - s3transfer==0.3.4
     - sacremoses==0.0.43
-    - scikit-learn==0.23.2
-    - scipy==1.4.1
-    - seaborn==0.11.0
+    - scikit-learn==0.24.0
+    - scipy==1.6.0
+    - seaborn==0.11.1
     - segtok==1.5.10
-    - sentence-transformers==0.3.9
-    - sentencepiece==0.1.91
-    - six==1.12.0
-    - smart-open==4.0.1
+    - sentence-transformers==0.4.1.2
+    - sentencepiece==0.1.95
+    - setuptools==51.1.2
+    - smart-open==4.1.0
     - snowballstemmer==2.0.0
-    - sortedcontainers==2.3.0
-    - soupsieve==2.0.1
-    - spacy==2.3.2
-    - speechrecognition==3.8.1
-    - sphinx==3.3.1
+    - spacy==2.3.5
+    - sphinx==3.4.3
     - sphinxcontrib-applehelp==1.0.2
     - sphinxcontrib-devhelp==1.0.2
     - sphinxcontrib-htmlhelp==1.0.3
     - sphinxcontrib-jsmath==1.0.1
     - sphinxcontrib-qthelp==1.0.3
     - sphinxcontrib-serializinghtml==1.1.4
-    - sqlalchemy==1.3.20
     - sqlitedict==1.7.0
-    - srsly==1.0.4
-    - starlette==0.13.6
-    - statsmodels==0.12.1
+    - srsly==1.0.5
+    - starlette==0.14.1
     - tabulate==0.8.7
     - tensorboardx==1.8
     - termcolor==1.1.0
     - terminaltables==3.1.0
-    - textattack==0.2.14
-    - textract==1.6.3
-    - thinc==7.4.1
+    - textattack==0.2.15
+    - thinc==7.4.5
     - threadpoolctl==2.1.0
     - tokenizers==0.9.4
     - toml==0.10.2
+    - torch==1.7.1
     - tqdm==4.49.0
-    - transformers==4.2.0.dev0
-    - typer==0.3.2
-    - tzlocal==1.5.1
-    - ujson==3.2.0
-    - unidecode==1.1.1
+    - transformers==4.3.0.dev0
+    - umap-learn==0.5.0
     - urllib3==1.26.2
-    - uvicorn==0.11.8
-    - uvloop==0.14.0
+    - uvicorn==0.13.3
     - wasabi==0.8.0
     - wcwidth==0.2.5
-    - websockets==8.1
     - word2number==1.1
     - wrapt==1.12.1
-    - xlrd==1.2.0
-    - xlsxwriter==1.3.7
     - xxhash==2.0.0
     - yarg==0.1.9
-    - zipp==3.4.0
 prefix: /home/s1569885/miniconda3/envs/allennlp
