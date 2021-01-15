@@ -93,8 +93,7 @@ class RagFragmentsModel(Model):
         self.model = RagMemoryTokenForGeneration.from_pretrained_question_encoder_generator(question_encoder_name,
                                                                                             generator_name,
                                                                                             config=config,
-                                                                                            retriever=self.retriever
-                                                                                            )
+                                                                                            retriever=self.retriever)
 
         self.rag_ndocs = ndocs
 
