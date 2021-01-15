@@ -148,6 +148,16 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_6_label_6_step_6_batch_1",
+                                                 description="Writing Prompts with 6 sentence steps.",
+                                                 input_size=6,
+                                                 target_size=6,
+                                                 step_size=6,
+                                                 batch_size=1,
+                                                 data_url=_URL,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 version=_VERSION),
         WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_6_label_6_step_6",
                                                  description="Writing Prompts with 6 sentence steps.",
                                                  input_size=6,
@@ -275,5 +285,5 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                self.config.step_size,
                                                dummy=self.config.dummy,
                                                contractions=True,
-                                               add_negative_examples=story_fragments.data.hf_interleaving_utils.add_negative_examples):
+                                               add_negative_examples=self.config.add_negative_examples):
                 yield example['id'], example

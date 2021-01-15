@@ -8,6 +8,7 @@ import numpy
 import textattack
 from blingfire import text_to_sentences
 from datasets import logger
+from nltk.corpus import wordnet
 
 '''
 from nltk.corpus import wordnet
@@ -23,8 +24,6 @@ from story_fragments.data.contraction_utils import CONTRACTIONS_LIST
 TRANSFORMATIONS_PER_EXAMPLE = 2
 
 PCT_WORDS_TO_SWAP = 0.15
-
-
 
 class WordSwapAntonymWordNet(WordSwap):
     """Transforms an input by replacing its words with antonyms provided by
