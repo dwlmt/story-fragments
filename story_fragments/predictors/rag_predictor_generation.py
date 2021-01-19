@@ -11,6 +11,9 @@ from overrides import overrides
 from transformers import AutoTokenizer
 from blingfire import text_to_sentences
 
+from story_fragments.predictors.utils import input_to_passages
+
+
 def parse_bool(b):
     return b == "True" or b == "TRUE" or b == "true" or b == "1"
 
@@ -58,27 +61,8 @@ class RagFragmentsGenerationPredictor(Predictor):
 
         results["inputs"] = inputs
         results["generated"] = []
-        
-        if "sentences" in inputs and len(inputs["sentences"]) > 0:
-            sentences = inputs["sentences"]
-        elif  "text" in inputs and len(inputs["text"]) > 0:
-            sentences = text_to_sentences(inputs["text"]).split('\n')
-        elif "passage" in inputs and len(inputs["passage"]) > 0:
-            sentences = text_to_sentences(inputs["text"]).split('\n')
-        elif "passages" in inputs and len(inputs["passages"]) > 0:
-            passages = list(inputs["passages"])
-            sentences = None
-        else:
-            raise ValueError("Input text or sentences must be provided.")
 
-        #results["inputs"]["sentences"] = [{"seq_num": i,"text": s} for i, s in enumerate(sentences) ]
-
-        #results["inputs"]["passages"] = []
-
-        if sentences is not None:
-            passages = list(more_itertools.windowed(sentences, n=self._sentence_batch_size, fillvalue=" ", step=self._sentence_step_size))
-
-        passages = [{"seq_num": i, "text": " ".join(s), "prompt": True} for i, s in enumerate(passages)]
+        passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size, sentence_step_size=self._sentence_step_size)
 
         for i, batch in enumerate(passages):
             sentences_joined = batch['text']

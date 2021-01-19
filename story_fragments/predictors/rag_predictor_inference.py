@@ -3,6 +3,8 @@ from random import random, choice
 from typing import List
 
 import more_itertools
+import nltk
+import numpy
 import torch
 from allennlp.common.util import JsonDict, sanitize
 from allennlp.data import DatasetReader, Instance
@@ -20,6 +22,10 @@ from torch import nn
 from transformers import AutoTokenizer
 from blingfire import text_to_sentences
 
+from story_fragments.predictors.utils import input_to_passages
+
+nltk.download('vader_lexicon')
+
 def parse_bool(b):
     return b == "True" or b == "TRUE" or b == "true" or b == "1"
 
@@ -34,6 +40,9 @@ class RagFragmentsInferencePredictor(Predictor):
             dataset_reader: DatasetReader
     ) -> None:
         super().__init__(model, dataset_reader)
+
+        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=4))
+        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
 
         self._input_size = int(os.getenv("SENTENCE_INPUT_SIZE", default=4))
         self._label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=4))
@@ -79,60 +88,23 @@ class RagFragmentsInferencePredictor(Predictor):
         results = {}
 
         results["inputs"] = inputs
-        results["generated"] = []
-        
-        if "sentences" in inputs and len(inputs["sentences"]) > 0:
-            sentences = inputs["sentences"]
-        elif  "text" in inputs and len(inputs["text"]) > 0:
-            sentences = text_to_sentences(inputs["text"]).split('\n')
-        elif "passage" in inputs and len(inputs["passage"]) > 0:
-            sentences = text_to_sentences(inputs["text"]).split('\n')
-        elif "passages" in inputs and len(inputs["passages"]) > 0:
-            passages = list(inputs["passages"])
-            sentences = None
-        else:
-            raise ValueError("Input text or sentences must be provided.")
 
-        #results["inputs"]["sentences"] = [{"seq_num": i,"text": s} for i, s in enumerate(sentences) ]
+        passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
+                                     sentence_step_size=self._sentence_step_size)
 
-        #results["inputs"]["passages"] = []
         results["passages"] = []
 
-        example_batches = []
-        if sentences is not None:
-            windowed_sentences = list(more_itertools.windowed(sentences, n=self._input_size + self._label_size, step=self._step_size
-                                                              , fillvalue=" "))
-
-            for i, window in enumerate(windowed_sentences):
-                input_text = window[: self._input_size]
-                label_text = window[-self._label_size:]
-
-                example = {}
-                example["id"] = f"{i}"
-                example["text"] = " ".join(input_text).strip()
-                example["label"] = " ".join(label_text).strip()
-
-                example_batches.append(example)
-
-        else:
-            for i, (text, label) in enumerate(list(
-                more_itertools.windowed(sentences, n=2, step=1, fillvalue=" "))):
-
-                example = {}
-                example["id"] = f"{i}"
-                example["text"] = text
-                example["label"] = label
-
-                example_batches.append(example)
-
         model_outputs_list = []
-        for example in example_batches:
+        for example in passages:
+
+            results["passages"].append(example)
 
             instance = self._json_to_instance(example)
 
-            print(f"Instances: {instance}")
-
             outputs = self._model.forward_on_instance(instance)
+
+            sentiment = self._vader_analyzer.polarity_scores(example["text"])
+            outputs["vader_sentiment"] = sentiment
 
             if self._keep_embeddings:
                 example["retrieved_doc_embedding"] = outputs["retrieved_doc_embeddings"].tolist()
@@ -150,10 +122,12 @@ class RagFragmentsInferencePredictor(Predictor):
 
         for i, (first, second) in enumerate(more_itertools.windowed(model_outputs_list, n=2, step=1)):
 
+
             if first == None or second == None:
                 continue
 
             def vector_distance_metrics(name, x, y):
+
                 res_dict = {}
 
                 wass_dist = wasserstein_distance(x.numpy(), y.numpy())
@@ -164,6 +138,14 @@ class RagFragmentsInferencePredictor(Predictor):
 
                 if len(y.size()) < len(x.size()):
                     y = torch.unsqueeze(y, dim=0).expand_as(x)
+
+                norm = numpy.linalg.norm(x)
+                x = x / norm
+
+                norm = numpy.linalg.norm(y)
+                y = y / norm
+
+                print(f"Normalized: {x}, {y}")
 
                 l1_dist = self._l1_distance(x, y)
                 l2_dist = self._l2_distance(x, y)
@@ -196,6 +178,8 @@ class RagFragmentsInferencePredictor(Predictor):
             results["passages"][i]["prediction_metrics"] = {**metrics,**results["passages"][i]["prediction_metrics"]}
 
             results["passages"][i]["prediction_metrics"]["perplexity"] = first["perplexity"].item()
+
+            results["passages"][i]["prediction_metrics"]["vader_sentiment"] = first["vader_sentiment"]
 
         self._model.clear_memory()
 
