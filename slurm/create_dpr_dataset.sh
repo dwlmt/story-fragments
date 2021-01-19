@@ -23,8 +23,8 @@ source /home/${USER}/miniconda3/bin/activate allennlp
 cd /home/s1569885/git/story-fragments/story_fragments/data_processing 
 
 python create_dpr_dataset.py create --base-output-dir /home/s1569885/datasets/wikiplots_dpr/ \
---dataset-name wikiplots_20200701_dpr_window_4_step_2_exact \
+--dataset-name wikiplots_20200701_dpr_window_6_step_3_exact \
 --datasets /home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701.jsonl \
---index-name exact --index-worlds 512 --window-size 4 --window-step 2 --skip-splitting True
+--index-name exact --index-worlds 512 --window-size 6 --window-step 3 --skip-splitting False
 
 

@@ -4,7 +4,7 @@
 #SBATCH -N 1	  # nodes requested
 #SBATCH -n 1	  # tasks requested
 #SBATCH --gres=gpu:1
-#SBATCH --mem=24g  # Memory
+#SBATCH --mem=48g  # Memory
 #SBATCH --cpus-per-task=12  # number of cpus to use - there are 32 on each node.
 
 # Set EXP_BASE_NAME and BATCH_FILE_PATH
@@ -50,6 +50,10 @@ export EXP_ROOT="${CLUSTER_HOME}/git/story-fragments"
 
 export SERIAL_DIR="${SCRATCH_HOME}/${EXP_ID}"
 export ALLENNLP_CACHE_ROOT="${SCRATCH_HOME}/allennlp_cache/"
+export HF_DATASETS_CACHE="${SCRATCH_HOME}/huggingface_cache/"
+export TMPDIR=${HOME}/tmp/
+export TMP="${TMPDIR}"
+export TEMP="${TMPDIR}"
 
 export PREDICTION_STORY_FILE="${CLUSTER_HOME}/${BATCH_FILE_PATH}"
 
@@ -66,11 +70,24 @@ mkdir -p ${SERIAL_DIR}
 echo "============"
 echo "ALLENNLP Task========"
 
-allennlp predict --include-package story_fragments --predictor ${PREDICTOR} \
+echo "${OVERRIDES_JSON}"
+if [ -z "${OVERRIDES_JSON}" ];
+then
+
+  allennlp predict --include-package story_fragments --predictor ${PREDICTOR} \
   ${MODEL_ZIP} \
   ${PREDICTION_STORY_FILE} --cuda-device 0 \
   --batch-size 1 \
-  --output-file ${SERIAL_DIR}/${EXP_ID}_prediction_output.jsonl
+  --output-file ${SERIAL_DIR}/${EXP_ID}_prediction_output.jsonl;
+
+else
+  allennlp predict --include-package story_fragments --predictor ${PREDICTOR} \
+  ${MODEL_ZIP} \
+  ${PREDICTION_STORY_FILE} --cuda-device 0 \
+  --overrides "${OVERRIDES_JSON}" \
+  --batch-size 1 \
+  --output-file ${SERIAL_DIR}/${EXP_ID}_prediction_output.jsonl; fi
+
 
 echo "============"
 echo "ALLENNLP Task finished"

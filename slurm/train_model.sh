@@ -4,7 +4,7 @@
 #SBATCH -N 1	  # nodes requested
 #SBATCH -n 1	  # tasks requested
 #SBATCH --gres=gpu:4
-#SBATCH --mem=96g  # Memory
+#SBATCH --mem=92g  # Memory
 #SBATCH --cpus-per-task=32  # number of cpus to use - there are 32 on each node.
 
 # Set EXP_BASE_NAME and BATCH_FILE_PATH
@@ -57,6 +57,8 @@ export SERIAL_DIR="${SCRATCH_HOME}/${EXP_ID}"
 
 export ALLENNLP_CACHE_ROOT="${SCRATCH_HOME}/allennlp_cache/"
 rm -rf "${SCRATCH_HOME}/allennlp_cache/"
+
+export HF_DATASETS_CACHE="${SCRATCH_HOME}/huggingface_cache/"
 
 # Ensure the scratch home exists and CD to the experiment root level.
 cd "${EXP_ROOT}" # helps AllenNLP behave
