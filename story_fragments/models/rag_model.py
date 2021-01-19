@@ -6,7 +6,7 @@ import torch
 from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
 from allennlp.training.metrics import Perplexity, CategoricalAccuracy
-from transformers import AutoTokenizer, RagTokenizer
+from transformers import AutoTokenizer
 
 from story_fragments.models.utils import freeze_part, unfreeze_part
 from story_fragments.modules.memory_model import RagMemoryTokenForGeneration
@@ -23,7 +23,7 @@ logger.setLevel("DEBUG")
 class RagFragmentsModel(Model):
     def __init__(self,
                  vocab: Vocabulary,
-                 retriever_tokenizer_name = "facebook/dpr-question_encoder-multiset-base",
+                 retriever_tokenizer_name="facebook/dpr-question_encoder-multiset-base",
                  tokenizer_name: str = "facebook/bart-base",
                  question_encoder_name: str = "facebook/dpr-question_encoder-multiset-base",
                  retriever_name: str = "facebook/rag-token-base",
@@ -55,7 +55,7 @@ class RagFragmentsModel(Model):
         super().__init__(vocab)
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-        self.retriever_tokenizer =  AutoTokenizer.from_pretrained(retriever_tokenizer_name)
+        self.retriever_tokenizer = AutoTokenizer.from_pretrained(retriever_tokenizer_name)
 
         config = RagMemoryConfig.from_pretrained(retriever_name)
 
@@ -153,7 +153,7 @@ class RagFragmentsModel(Model):
 
             label_tokens = labels["tokens"]['token_ids']
 
-            #print(f"Model Inputs: {input_ids.size()}, {label_tokens.size()}")
+            # print(f"Model Inputs: {input_ids.size()}, {label_tokens.size()}")
 
             model_output = self.model(input_ids=input_ids,
                                       attention_mask=input_mask,
@@ -173,14 +173,13 @@ class RagFragmentsModel(Model):
         if self.training and self.rotate_grad_training:
             self.rotate_grad_parts_list.rotate(-1)
 
-
         if not self.training:
 
             with torch.no_grad():
 
-                doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1),dim=2)
+                doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1), dim=2)
 
-                x = torch.mean(doc_scores_softmax  * model_output.retrieved_doc_embeds * self.rag_ndocs, dim=-2)
+                x = torch.mean(doc_scores_softmax * model_output.retrieved_doc_embeds * self.rag_ndocs, dim=-2)
                 results["retrieved_doc_embeddings"] = x
 
                 generator_enc_last_hidden_state = model_output.generator_enc_last_hidden_state
@@ -195,13 +194,14 @@ class RagFragmentsModel(Model):
                     doc_scores_softmax = torch.unsqueeze(doc_scores_softmax, dim=-1)
 
                 generator_indexed = generator_enc_last_hidden_state[context_mask]
-                x =  torch.mean((doc_scores_softmax * generator_indexed * self.rag_ndocs),dim=-2)
+                x = torch.mean((doc_scores_softmax * generator_indexed * self.rag_ndocs), dim=-2)
                 x = torch.mean(x, dim=-2)
                 results["generator_enc_embeddings"] = x
 
-                results["perplexity"] = model_output.loss#torch.exp(model_output.loss) / generator_indexed.size()[-1]
+                results["perplexity"] = torch.exp(model_output.loss / generator_indexed.size()[-1])
 
         results["input"] = metadata
+
         logger.debug(f"Results: {results}")
         return results
 
@@ -235,7 +235,6 @@ class RagFragmentsModel(Model):
             elif part_to_unfreeze == "decoder":
                 unfreeze_part(self.model.generator.context_model.decoder)
 
-
     def make_output_human_readable(self, output_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         if "generated_sequences" in output_dict:
             output_dict["generated_sequences"] = self.tokenizer.decode(output_dict["generated_sequences"],
@@ -246,7 +245,8 @@ class RagFragmentsModel(Model):
         if not self.training:
             with torch.no_grad():
 
-                self.metrics['lm_perplexity'](torch.mean(model_output.loss))
+                self.metrics['lm_perplexity'](torch.mean(
+                    model_output.loss / torch.sum(label_mask,(0,1))))
 
                 num_docs = self.rag_ndocs
                 labels_batch_size = label_tokens.size()[0]
@@ -308,8 +308,7 @@ class RagFragmentsModel(Model):
 
         return metrics
 
-
-    def generate(self, text: Union[str,List],
+    def generate(self, text: Union[str, List],
                  add_to_memory: bool = True,
                  max_length: int = 128,
                  min_length: int = 10,
@@ -325,10 +324,11 @@ class RagFragmentsModel(Model):
                  temperature=1.0,
                  top_k=50,
                  top_p=0.9,
+                 max_input_length: int = 512
                  ) -> List[Dict[str, Any]]:
 
         print(f"Text: {text}")
-        input_dict = self.retriever_tokenizer.encode_plus(text)
+        input_dict = self.retriever_tokenizer.encode_plus(text, max_length=max_input_length)
         print(f"{input_dict}")
         input_ids = input_dict["input_ids"]
         attention_mask = input_dict["attention_mask"]
@@ -360,7 +360,7 @@ class RagFragmentsModel(Model):
                                         top_k=top_k,
                                         top_p=top_p,
                                         )
-        #print(f"Generated: {generated}")
+        # print(f"Generated: {generated}")
         generated_strings = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
         print(f"Generated strings: {generated},{generated_strings}")
 
@@ -369,16 +369,18 @@ class RagFragmentsModel(Model):
             generated = {"id": i, "text": gen_string}
             generated_list.append(generated)
 
-        #if add_to_memory:
+        # if add_to_memory:
         #    self.add_to_memory(text=text, add_to_memory=add_to_memory)
 
         return generated_list
 
     def add_to_memory(self, text: Union[str, List],
-                 add_to_memory: bool = True) -> Dict[str, Any]:
+                      add_to_memory: bool = True,
+                      max_input_length: int = 512
+                      ) -> Dict[str, Any]:
 
         if add_to_memory:
-            input_dict = self.retriever_tokenizer.encode_plus(text)
+            input_dict = self.retriever_tokenizer.encode_plus(text, max_length=max_input_length)
 
             input_ids = input_dict["input_ids"]
             attention_mask = input_dict["attention_mask"]
@@ -409,11 +411,9 @@ class RagFragmentsModel(Model):
                     self.memory_id += 1
 
                 if add_to_memory:
-                    #print(f"Add to memory {input_ids}, {attention_mask}, {input_text_list}")
+                    # print(f"Add to memory {input_ids}, {attention_mask}, {input_text_list}")
                     self.model.rag.add_to_memory(input_ids, attention_mask, input_text_list)
 
     def clear_memory(self):
 
         self.model.rag.clear_memory()
-            
-

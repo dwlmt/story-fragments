@@ -27,7 +27,7 @@ class DiscFragmentsModel(Model):
     def __init__(self,
                  vocab: Vocabulary,
                  tokenizer_name="bert-base-cased",
-                 context_name: str = "bert-large-cased",
+                 context_name: str = "bert-base-cased",
                  target_name: str = None,
                  context_max_seq_length: int = 256,
                  target_max_seq_length: int = 256,
@@ -232,17 +232,16 @@ class DiscFragmentsModel(Model):
             else:
                 neg_label_output = None
 
-            # #print(f"Examples list: {examples_list}"
-
-            # print(f"Representations: {context_output}, {label_output}, {context_output.size()}, {label_output.size()}")
+            #print(f"Label ids: {label_ids}, Label mask : {label_mask}, Negative ids: {negative_ids}, "
+            #      f"Negative Mask: {neg_label_mask}, Context Output: {context_output}")
 
             if neg_label_output is not None:
                 torch.cat((label_output, neg_label_output))
-            scores =  pytorch_cos_sim(context_output,label_output) * 20 #torch.mm(context_output, label_output.transpose(0, 1))
+            scores = torch.mm(context_output, label_output.transpose(0, 1))
+            #  pytorch_cos_sim(context_output,label_output) * 20
 
             scores[torch.isnan(scores)] = 0.0
 
-            # print(f"Dot Product: {scores}")
             labels = torch.tensor(range(len(scores)), dtype=torch.long,
                                   device=scores.device)
             # #print(f"Labels: {labels}")

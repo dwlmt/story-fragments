@@ -6,6 +6,7 @@ from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
 from allennlp.training.metrics import CategoricalAccuracy
 from sentence_transformers import SentenceTransformer, models
+from sentence_transformers.util import pytorch_cos_sim
 from torch.nn import CrossEntropyLoss
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoTokenizer
@@ -26,11 +27,11 @@ class SbertDiscFragmentsModel(Model):
 
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
 
-        #word_embedding_model = models.Transformer(model_name, max_seq_length=max_seq_length)
-        #pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
+        word_embedding_model = models.Transformer(model_name, max_seq_length=max_seq_length)
+        pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
 
-        #self.model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
-        self.model = SentenceTransformer(model_name)
+        self.model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+        #self.model = SentenceTransformer(model_name)
 
         self.metrics = {}
 
@@ -101,15 +102,16 @@ class SbertDiscFragmentsModel(Model):
             # print(f"Examples list: {examples_list}")
             output = [self.model(sentence_feature)["sentence_embedding"] for sentence_feature in examples_list]
 
-            reps_a = output[0]
-            reps_b = torch.cat(output[1:])
+            context_output = output[0]
+            labels_output = torch.cat(output[1:])
             # print(f"Representations: {reps_a}, {reps_b}, {reps_a.size()}, {reps_b.size()}")
 
-            scores = torch.mm(reps_a, reps_b.transpose(0, 1))
+            scores =  torch.mm(context_output, labels_output.transpose(0, 1))
+                #pytorch_cos_sim(context_output, labels_output) * 20
 
             scores[torch.isnan(scores)] = 0.0
 
-            print(f"Dot Product: {scores}")
+            #print(f"Dot Product: {scores}")
             labels = torch.tensor(range(len(scores)), dtype=torch.long,
                                   device=scores.device)
             # print(f"Labels: {labels}")
