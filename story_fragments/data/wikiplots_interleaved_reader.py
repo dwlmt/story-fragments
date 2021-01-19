@@ -27,7 +27,7 @@ class WikiplotsInterleavedReader(DatasetReader):
                  validation_split: int = 10,
                  test_split: int = 10,
                  search_negative_labels: bool = False,
-                 k_nearest: int = 6,
+                 k_nearest: int = 5,
                  manual_shards: int = 1,
                  max_instances: int = None,
                  lazy: bool = True):
@@ -135,7 +135,7 @@ class WikiplotsInterleavedReader(DatasetReader):
             dataset = load_dataset(f"{os.path.dirname(__file__)}/wikiplots_interleaved_hf_dataset.py", name=config,
                                    split=f'train[-{self.test_split}%:]')
 
-        if self.manual_shards > 1:
+        if self.manual_shards > 1  and not self.search_negative_labels:
             dataset = dataset.shard(self.manual_shards, random.randrange(0, self.manual_shards), contiguous=True)
 
         if self.search_negative_labels:
@@ -143,10 +143,7 @@ class WikiplotsInterleavedReader(DatasetReader):
 
         for i, example in enumerate(dataset):
 
-            # if self.seen[file_path] == 0 and i == 10000:
-            #    break
-
-            if self.search_negative_labels:
+            if self.search_negative_labels :#k_nearest: int = 5,
                 try:
                     label = example["label"]
                     neg_examples = dataset.get_nearest_examples("label", label, k=1 + self.k_nearest).examples['label'][

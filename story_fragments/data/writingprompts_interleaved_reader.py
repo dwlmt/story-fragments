@@ -25,7 +25,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
                  encoder_max_length: int = 256,
                  add_special_tokens: bool = True,
                  search_negative_labels: bool = False,
-                 k_nearest: int = 6,
+                 k_nearest: int = 5,
                  manual_shards: int = 1,
                  max_instances: int = None,
                  lazy: bool = True):
@@ -118,7 +118,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
         dataset = load_dataset(f"{os.path.dirname(__file__)}/writingprompts_interleaved_hf_dataset.py", name=config,
                                split=split)
 
-        if self.manual_shards > 1:
+        if self.manual_shards > 1 and not self.search_negative_labels:
             dataset = dataset.shard(self.manual_shards, random.randrange(0, self.manual_shards), contiguous=True)
 
         if self.search_negative_labels:
@@ -126,10 +126,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
 
         for i, example in enumerate(dataset):
 
-            # if self.seen[file_path] == 0 and i == 10000:
-            #    break
-
-            if self.search_negative_labels:
+            if self.search_negative_labels and self.seen[file_path] > 0:
                 try:
                     label = example["label"]
                     neg_examples = dataset.get_nearest_examples("label", label, k=1 + self.k_nearest).examples['label'][
