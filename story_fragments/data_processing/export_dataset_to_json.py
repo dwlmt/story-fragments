@@ -28,16 +28,16 @@ class ExportDatasetToJson(object):
         episode_passages = []
         start_of_episode = None
 
+        seq_counter = 0
+
         for example in dataset:
 
             if not nested:
                 output_list.append(example)
             else:
-
                 if "episode_begun" in example and example["episode_begun"] == True:
                     episode = copy.deepcopy(example)
-                    text = episode["text"]
-                    episode_passages.append({"text": text, "seq_num": example["episode_seq_num"], "label": example["label"]})
+                    episode_passages.append({"text": example["text"], "seq_num": seq_counter, "label": example["label"]})
                     del episode["text"]
                     del episode["episode_seq_num"]
                     del episode["episode_begun"]
@@ -45,12 +45,14 @@ class ExportDatasetToJson(object):
                     del episode["negative_labels"]
                     start_of_episode = episode
                 elif "episode_done" in example and example["episode_done"] == True:
-                    episode_passages.append({"text": text, "seq_num": example["episode_seq_num"]})
+                    episode_passages.append({"text": example["text"], "seq_num": seq_counter, "label": example["label"]})
                     start_of_episode["passages"] = episode_passages
                     output_list.append(start_of_episode)
                     episode_passages = []
+                    seq_counter = 0
                 else:
-                    episode_passages.append({"text": text, "seq_num": example["episode_id"], "label": example["label"]})
+                    episode_passages.append({"text": example["text"], "seq_num": seq_counter, "label": example["label"]})
+                    seq_counter += 1
 
         print(f"Output JSON: {output_list[-1]}")
 
