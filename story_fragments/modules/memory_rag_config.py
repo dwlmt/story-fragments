@@ -38,6 +38,7 @@ class RagMemoryConfig(RagConfig):
             retrieval_batch_size=32,
             dataset="wiki_dpr",
             dataset_split="train",
+            embeddings_name="multiset",
             index_name="compressed",
             index_path=None,
             passages_path=None,
@@ -92,6 +93,7 @@ class RagMemoryConfig(RagConfig):
             **kwargs,
         )
 
+        self.embeddings_name = embeddings_name
         self.use_dataset_retrieval = use_dataset_retrieval
         self.use_memory_retrieval = use_memory_retrieval
         self.memory_n_docs = memory_n_docs

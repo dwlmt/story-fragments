@@ -16,12 +16,14 @@
 
 import re
 import time
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import numpy as np
+from datasets import load_dataset
 from more_itertools import chunked
 from transformers import BatchEncoding
-from transformers.models.rag.retrieval_rag import RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CustomHFIndex, CanonicalHFIndex
+from transformers.models.rag.retrieval_rag import RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CustomHFIndex, \
+    CanonicalHFIndex, HFIndexBase
 from transformers.utils import logging
 
 from story_fragments.modules.memory_cache_index import MemoryIndex
@@ -63,29 +65,50 @@ class CustomMemoryHFIndex(CustomHFIndex):
         return self.dataset[doc_id]
 
 
-class CanonicalMemoryHFIndex(CanonicalHFIndex):
-    """
-    A wrapper around an instance of :class:`~datasets.Datasets`.
-    The dataset and the index are both loaded from the indicated paths on disk.
+class CanonicalMemoryHFIndex(HFIndexBase):
 
-    Args:
-        vector_size (:obj:`int`): the dimension of the passages embeddings used by the index
-        dataset_path (:obj:`str`):
-            The path to the serialized dataset on disk.
-            The dataset should have 3 columns: title (str), text (str) and embeddings (arrays of dimension vector_size)
-        index_path (:obj:`str`)
-            The path to the serialized faiss index on disk.
-    """
+    def __init__(
+            self,
+            vector_size: int,
+            dataset_name: str = "wiki_dpr",
+            dataset_split: str = "train",
+            index_name: Optional[str] = None,
+            index_path: Optional[str] = None,
+            use_dummy_dataset=False,
+            embeddings_name="multiset",
+    ):
+        if int(index_path is None) + int(index_name is None) != 1:
+            raise ValueError("Please provide `index_name` or `index_path`.")
+        self.dataset_name = dataset_name
+        self.dataset_split = dataset_split
+        self.index_name = index_name
+        self.index_path = index_path
+        self.use_dummy_dataset = use_dummy_dataset
+        self.embeddings_name = embeddings_name
+        logger.info("Loading passages from {}".format(self.dataset_name))
+        dataset = load_dataset(
+            self.dataset_name, with_index=False, split=self.dataset_split, dummy=self.use_dummy_dataset,
+            embeddings_name=self.embeddings_name
+        )
+        super().__init__(vector_size, dataset, index_initialized=False)
 
-    def __init__(self,
-                 vector_size,
-                 dataset_name,
-                 dataset_split,
-                 index_name,
-                 index_path,
-                 use_dummy_dataset):
-        super().__init__(vector_size=vector_size, dataset_name=dataset_name, dataset_split=dataset_split,
-                         index_name=index_name, index_path=index_path, use_dummy_dataset=use_dummy_dataset)
+    def init_index(self):
+        if self.index_path is not None:
+            logger.info("Loading index from {}".format(self.index_path))
+            self.dataset.load_faiss_index("embeddings", file=self.index_path)
+        else:
+            logger.info("Loading index from {}".format(self.dataset_name + " with index name " + self.index_name))
+            self.dataset = load_dataset(
+                self.dataset_name,
+                with_embeddings=True,
+                with_index=True,
+                split=self.dataset_split,
+                index_name=self.index_name,
+                dummy=self.use_dummy_dataset,
+                embeddings_name=self.embeddings_name
+            )
+            self.dataset.set_format("numpy", columns=["embeddings"], output_all_columns=True)
+        self._index_initialized = True
 
     def get_doc_dicts(self, doc_ids: np.ndarray) -> List[dict]:
         return [self.dataset[doc_ids[i].tolist()] for i in range(doc_ids.shape[0])]
@@ -161,6 +184,7 @@ class RagMemoryRetriever(RagRetriever):
                 index_name=config.index_name,
                 index_path=config.index_path,
                 use_dummy_dataset=config.use_dummy_dataset,
+                embeddings_name=config.embeddings_name
             )
 
     def _main_retrieve(self, question_hidden_states: np.ndarray, n_docs: int) -> Tuple[np.ndarray, np.ndarray]:
