@@ -126,7 +126,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
 
         for i, example in enumerate(dataset):
 
-            if self.search_negative_labels and self.seen[file_path] > 0:
+            if self.search_negative_labels :#k_nearest: int = 5,
                 try:
                     label = example["label"]
                     neg_examples = dataset.get_nearest_examples("label", label, k=1 + self.k_nearest).examples['label'][

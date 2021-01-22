@@ -42,11 +42,14 @@ _PROJECT_URL = ""
 _BOOK_CORPUS_URL = "https://the-eye.eu/public/AI/pile_preliminary_components/books1.tar.gz"
 _BOOK_CORPUS_GLOB_PATH = "**/*.epub.txt"
 
-_SCHMOOP_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1hhDWhVr1PhFfPj63h6MYACtfBttK_Usl"
-_SCHMOOP_CORPUS_GLOB_PATH = "**/*.txt.utf8"
+_SCHMOOP_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1y5Ac3LARFuMAV0bmxy9V91JFkc8J59nP"
+_SCHMOOP_CORPUS_GLOB_PATH =  "**/*.txt.utf8"
 
 _MOVIE_CORPUS_URL = "https://drive.google.com/uc?export=download&id=16DBMpLY-w5ZF0yph-D3lhRjS_Cgwj-vZ"
 _MOVIE_CORPUS_GLOB_PATH = "**/scripts/parsed/full/*.txt"
+
+_GUTENBERG_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1cwE0-pORicxcgD3kfQy8PBcRxn7Cc6gL"
+_GUTENBERG_CORPUS_GLOB_PATH =  "**/*.txt"
 
 
 class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
@@ -107,6 +110,15 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        input_size=4,
                                        target_size=4,
                                        step_size=4,
+                                       data_url=_BOOK_CORPUS_URL,
+                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
+                                       version=_VERSION,
+                                       dummy=True),
+        GlobInterleavedHfDatasetConfig(name="bookcorpus_dummy_6_label_6_step_6",
+                                       description="Writing Prompts with 6 sentence steps.",
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
                                        data_url=_BOOK_CORPUS_URL,
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
                                        version=_VERSION,
@@ -207,6 +219,16 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        shuffle=False,
                                        dummy=True,
                                        version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="schmoop_dummy_6_label_6_step_6",
+                                       description="Schmoop dummy for testing purposes.",
+                                       data_url=_SCHMOOP_CORPUS_URL,
+                                       glob_path=_SCHMOOP_CORPUS_GLOB_PATH,
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       shuffle=False,
+                                       dummy=True,
+                                       version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="schmoop_dummy_4_label_4_step_4_neg",
                                        description="Schmoop dummy for testing purposes.",
                                        data_url=_SCHMOOP_CORPUS_URL,
@@ -282,6 +304,15 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        step_size=4,
                                        dummy=True,
                                        version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="moviecorpus_dummy_6_label_6_step_6",
+                                       description="Movie script dummy for testing purposes.",
+                                       data_url=_MOVIE_CORPUS_URL,
+                                       glob_path=_MOVIE_CORPUS_GLOB_PATH,
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       dummy=True,
+                                       version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="moviecorpus_dummy_4_label_4_step_4_neg",
                                        description="Movie script dummy for testing purposes.",
                                        data_url=_MOVIE_CORPUS_URL,
@@ -333,7 +364,42 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        step_size=6,
                                        data_url=_MOVIE_CORPUS_URL,
                                        glob_path=_MOVIE_CORPUS_GLOB_PATH,
-                                       version=_VERSION)
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="gutenberg_context_6_label_6_step_6_batch_1",
+                                       description="Gutenberg corpus 6 sentence steps.",
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       batch_size=1,
+                                       data_url=_GUTENBERG_CORPUS_URL,
+                                       glob_path=_GUTENBERG_CORPUS_GLOB_PATH,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="gutenberg_dummy_6_label_6_step_6",
+                                       description="Gutenberg corpus 6 sentence steps.",
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       dummy=True,
+                                       data_url=_GUTENBERG_CORPUS_URL,
+                                       glob_path=_GUTENBERG_CORPUS_GLOB_PATH,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="gutenberg_context_6_label_6_step_6",
+                                       description="Gutenberg corpus 6 sentence steps.",
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       data_url=_GUTENBERG_CORPUS_URL,
+                                       glob_path=_GUTENBERG_CORPUS_GLOB_PATH,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="gutenberg_context_6_label_6_step_6_neg",
+                                       description="Gutenberg corpus 6 sentence steps.",
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       add_negative_examples=True,
+                                       data_url=_GUTENBERG_CORPUS_URL,
+                                       glob_path=_GUTENBERG_CORPUS_GLOB_PATH,
+                                       version=_VERSION),
 
     ]
 
@@ -384,10 +450,14 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
             _id = 0
             for book_file_path in book_files:
                 path = pathlib.PurePath(book_file_path)
-                with open(book_file_path, mode="r", encoding="utf-8") as f:
-                    glob_dict = {"title": str(path.name), "text": f.read(), "id": _id}
-                    yield glob_dict
-                    _id += 1
+                try:
+                    with open(book_file_path, mode="r", encoding="utf-8") as f:
+                        glob_dict = {"title": str(path.name), "text": f.read(), "id": _id}
+                        yield glob_dict
+                        _id += 1
+                except Exception as e:
+                    print(f"{e}")
+                    
 
         for example in interleave_examples(_reader(book_files=book_files), self.config.batch_size,
                                            self.config.input_size,
