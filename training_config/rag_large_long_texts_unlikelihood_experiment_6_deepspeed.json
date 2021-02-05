@@ -2,53 +2,74 @@
   "dataset_reader": {
     "type": "interleaving-batch",
     "batch_size": 16,
+    "lazy": true,
     "readers": {
       "moviecorpus-interleaved": {
         "type": "moviecorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 192,
-        "lazy": false
-      },
-      "schmoop-interleaved": {
-        "type": "schmoop-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 192,
-        "lazy": false
+        "manual_shards": 1,
+        "lazy": true
       },
       "bookcorpus-interleaved": {
         "type": "bookcorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 192,
-        "lazy": false
+        "manual_shards": 1,
+        "lazy": true
       },
-      "writingprompts-interleaved": {
-        "type": "writingprompts-interleaved",
+      "gutenberg-interleaved": {
+        "type": "gutenberg-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 192,
-        "lazy": false
-      },
-      "wikiplots-interleaved": {
-        "type": "wikiplots-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 192,
-        "lazy": false
+        "manual_shards": 1,
+        "lazy": true
       }
     }
   },
-  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_4_label_4_step_4/train\", \"schmoop-interleaved\": \"schmoop_dummy_4_label_4_step_4/train\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_4_label_4_step_4/train\", \"wikiplots-interleaved\": \"wikiplots_dummy_4_label_4_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_4_step_4/train\"}",
-  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_4_label_4_step_4/validation\", \"schmoop-interleaved\": \"schmoop_dummy_4_label_4_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_4_label_4_step_4/validation\", \"wikiplots-interleaved\": \"wikiplots_dummy_4_label_4_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy_4_label_4_step_4/validation\"}",
+  "validation_dataset_reader": {
+    "type": "interleaving-batch",
+    "batch_size": 16,
+    "lazy": true,
+    "readers": {
+      "moviecorpus-interleaved": {
+        "type": "moviecorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
+        "lazy": true
+      },
+      "bookcorpus-interleaved": {
+        "type": "bookcorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
+        "lazy": true
+      },
+      "gutenberg-interleaved": {
+        "type": "gutenberg-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
+        "lazy": true
+      }
+    }
+  },
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_6_label_6_step_6/train\", \"bookcorpus-interleaved\": \"bookcorpus_context_6_label_6_step_6/train\", \"gutenberg-interleaved\": \"gutenberg_context_6_label_6_step_6/validation\"}",
+  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_6_label_6_step_6/validation\",  \"bookcorpus-interleaved\": \"bookcorpus_context_6_label_6_step_6/validation\", \"gutenberg-interleaved\": \"gutenberg_context_6_label_6_step_6/validation\"}",
   "data_loader": {
     "batch_size": 4,
-    "batches_per_epoch": 1000
+    "batches_per_epoch": 50000
   },
   "validation_data_loader": {
     "batch_size": 4,
-    "batches_per_epoch": 100
+    "batches_per_epoch": 5000
   },
   "model": {
     "type": "rag-fragments",
@@ -56,14 +77,15 @@
     "generator_name": "facebook/bart-large",
     "retriever_name": "facebook/rag-token-nq",
     "index_name": "custom",
-    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_compressed",
-    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_compressed.faiss",
+    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_6_step_3_exact",
+    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_6_step_3_exact.faiss",
     "gradient_checkpointing": true,
     "ndocs": 5,
-    "max_combined_length": 320,
-    "use_memory_retrieval": true
+    "max_combined_length": 384,
+    "use_memory_retrieval": true,
+    "unlikelihood_ratio": 0.5
   },
-  "trainer": {
+   "trainer": {
     "type": "deepspeed",
     "use_amp": false,
     "optimizer": {
@@ -96,10 +118,10 @@
         "contiguous_gradients" : true,
         "cpu_offload": true
       },
-      "fp32_allreduce": false
+     "fp32_allreduce": false
     },
-    "num_epochs": 5,
-    "patience": 2,
+    "num_epochs":  40,
+    "patience": 3,
     "num_gradient_accumulation_steps": 1,
     "checkpointer": {
       "num_serialized_models_to_keep": 1
@@ -108,7 +130,9 @@
   "distributed": {
     "cuda_devices": [
       0,
-      1
+      1,
+      2,
+      3
     ]
   }
 }
