@@ -21,7 +21,7 @@ from __future__ import absolute_import, division, print_function
 import glob
 import os
 import pathlib
-from random import shuffle
+from random import shuffle, Random
 
 import datasets
 from datasets.info import SupervisedKeysData
@@ -39,7 +39,7 @@ _CITATION = """\
 """
 _PROJECT_URL = ""
 
-_BOOK_CORPUS_URL = "https://the-eye.eu/public/AI/pile_preliminary_components/books1.tar.gz"
+_BOOK_CORPUS_URL = "https://t.co/J3EaSEgwW0?amp=1"
 _BOOK_CORPUS_GLOB_PATH = "**/*.epub.txt"
 
 _SCHMOOP_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1y5Ac3LARFuMAV0bmxy9V91JFkc8J59nP"
@@ -48,7 +48,7 @@ _SCHMOOP_CORPUS_GLOB_PATH =  "**/*.txt.utf8"
 _MOVIE_CORPUS_URL = "https://drive.google.com/uc?export=download&id=16DBMpLY-w5ZF0yph-D3lhRjS_Cgwj-vZ"
 _MOVIE_CORPUS_GLOB_PATH = "**/scripts/parsed/full/*.txt"
 
-_GUTENBERG_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1cwE0-pORicxcgD3kfQy8PBcRxn7Cc6gL"
+_GUTENBERG_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1dObECu3jGIAFpMQtrkIu2uTwdLFsAvfj"
 _GUTENBERG_CORPUS_GLOB_PATH =  "**/*.txt"
 
 
@@ -123,6 +123,16 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
                                        version=_VERSION,
                                        dummy=True),
+        GlobInterleavedHfDatasetConfig(name="bookcorpus_dummy_6_label_6_step_6_neg",
+                                       description="Writing Prompts with 6 sentence steps.",
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       add_negative_examples=True,
+                                       data_url=_BOOK_CORPUS_URL,
+                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
+                                       version=_VERSION,
+                                       dummy=True),
         GlobInterleavedHfDatasetConfig(name="bookcorpus_dummy_4_label_4_step_4_neg",
                                        description="Writing Prompts with 4 sentence steps.",
                                        input_size=4,
@@ -149,14 +159,6 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        data_url=_BOOK_CORPUS_URL,
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
                                        version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="bookcorpus_context_4_label_4_step_4b",
-                                       description="Writing Prompts with 4 sentence steps.",
-                                       input_size=4,
-                                       target_size=4,
-                                       step_size=4,
-                                       data_url=_BOOK_CORPUS_URL,
-                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="bookcorpus_context_6_label_6_step_6_neg",
                                        description="Writing Prompts with 6 sentence steps.",
                                        input_size=6,
@@ -176,22 +178,6 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        glob_path=_BOOK_CORPUS_GLOB_PATH,
                                        version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="bookcorpus_context_6_label_6_step_6",
-                                       description="Writing Prompts with 6 sentence steps.",
-                                       input_size=6,
-                                       target_size=6,
-                                       step_size=6,
-                                       data_url=_BOOK_CORPUS_URL,
-                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="bookcorpus_context_6_label_6_step_6b",
-                                       description="Writing Prompts with 6 sentence steps.",
-                                       input_size=6,
-                                       target_size=6,
-                                       step_size=6,
-                                       data_url=_BOOK_CORPUS_URL,
-                                       glob_path=_BOOK_CORPUS_GLOB_PATH,
-                                       version=_VERSION),
-        GlobInterleavedHfDatasetConfig(name="bookcorpus_context_6_label_6_step_6c",
                                        description="Writing Prompts with 6 sentence steps.",
                                        input_size=6,
                                        target_size=6,
@@ -226,6 +212,17 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        input_size=6,
                                        target_size=6,
                                        step_size=6,
+                                       shuffle=False,
+                                       dummy=True,
+                                       version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="schmoop_dummy_6_label_6_step_6_neg",
+                                       description="Schmoop dummy for testing purposes.",
+                                       data_url=_SCHMOOP_CORPUS_URL,
+                                       glob_path=_SCHMOOP_CORPUS_GLOB_PATH,
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       add_negative_examples=True,
                                        shuffle=False,
                                        dummy=True,
                                        version=_VERSION),
@@ -313,6 +310,16 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        step_size=6,
                                        dummy=True,
                                        version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="moviecorpus_dummy_6_label_6_step_6_neg",
+                                       description="Movie script dummy for testing purposes.",
+                                       data_url=_MOVIE_CORPUS_URL,
+                                       glob_path=_MOVIE_CORPUS_GLOB_PATH,
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       dummy=True,
+                                       add_negative_examples=True,
+                                       version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="moviecorpus_dummy_4_label_4_step_4_neg",
                                        description="Movie script dummy for testing purposes.",
                                        data_url=_MOVIE_CORPUS_URL,
@@ -383,6 +390,16 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                                        data_url=_GUTENBERG_CORPUS_URL,
                                        glob_path=_GUTENBERG_CORPUS_GLOB_PATH,
                                        version=_VERSION),
+        GlobInterleavedHfDatasetConfig(name="gutenberg_dummy_6_label_6_step_6_neg",
+                                       description="Gutenberg corpus 6 sentence steps.",
+                                       input_size=6,
+                                       target_size=6,
+                                       step_size=6,
+                                       dummy=True,
+                                       add_negative_examples=True,
+                                       data_url=_GUTENBERG_CORPUS_URL,
+                                       glob_path=_GUTENBERG_CORPUS_GLOB_PATH,
+                                       version=_VERSION),
         GlobInterleavedHfDatasetConfig(name="gutenberg_context_6_label_6_step_6",
                                        description="Gutenberg corpus 6 sentence steps.",
                                        input_size=6,
@@ -441,8 +458,8 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
         book_files = glob.glob(glob_target, recursive=True)
 
         if self.config.shuffle:
-            # Fix using the default Allennlp random seed.
-            shuffle(book_files)
+            # This uses the Allennlp default random seed to keep validation and testsets the same across runs.
+            Random(13370).shuffle(book_files)
         else:
             book_files = sorted(book_files)
 

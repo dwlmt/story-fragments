@@ -17,7 +17,6 @@ class WritingPromptsInterleavedReader(DatasetReader):
     ''' Interleaved version of WritingPrompts.
 
     '''
-
     def __init__(self,
                  generator_model_name="facebook/bart-base",
                  generator_max_length: int = 128,
