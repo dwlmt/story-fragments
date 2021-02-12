@@ -186,8 +186,8 @@ class RagFragmentsBarthesPredictor(Predictor):
             scaler = MinMaxScaler()
             metric_scaled = numpy.squeeze(scaler.fit_transform(numpy.expand_dims(metric, axis=1)),axis=1)
             print(f"Metric scales: {metric_scaled}, {metric}")
-            peaks, properties = find_peaks(metric, prominence=self._peak_prominence, distance=self._peak_distance),#width=self._peak_width,
-                               #threshold=self._peak_threshold, height=self._peak_height)
+            peaks, properties = find_peaks(metric_scaled, prominence=self._peak_prominence, distance=self._peak_distance,
+                               threshold=self._peak_threshold, height=self._peak_height)
 
             print(f"Peaks {peaks}, {properties}")
 
@@ -198,7 +198,7 @@ class RagFragmentsBarthesPredictor(Predictor):
 
             for i, p in enumerate(peaks):
                 passages[p]["peaks"][f"{k}_peak"] = True
-                #passages[p]["peaks"][f"{k}_peak_properties"]["height"] = float(properties["peak_heights"][i])
+                passages[p]["peaks"][f"{k}_peak_properties"]["height"] = float(properties["peak_heights"][i])
                 passages[p]["peaks"][f"{k}_peak_properties"]["prominence"] = float(properties["prominences"][i])
                 passages[p]["peaks"][f"{k}_peak_properties"]["left_base"] = int(properties["left_bases"][i])
                 passages[p]["peaks"][f"{k}_peak_properties"]["right_base"] = int(properties["right_bases"][i])
