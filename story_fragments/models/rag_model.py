@@ -50,7 +50,7 @@ class RagFragmentsModel(Model):
                  entmax: bool = False,
                  entmax_k: int = 512,
                  unlikelihood_ratio: float = 1.0,
-                 unlikelihood_beta: float = 0.5,
+                 unlikelihood_beta: float = 0.5
                  ):
         super().__init__(vocab)
 
@@ -101,6 +101,8 @@ class RagFragmentsModel(Model):
         self.rotate_grad_parts_list = deque(["question_encoder", "encoder", "decoder"])
 
         self.lm_accuracy_top_k = lm_accuracy_top_k
+
+
         self.metrics = {}
 
         for acc in self.lm_accuracy_top_k:
@@ -147,7 +149,11 @@ class RagFragmentsModel(Model):
                                       attention_mask=input_mask,
                                       input_text_metadata=input_text_list,
                                       output_retrieved=True,
+                                      #output_attentions=True
                                       )
+
+            label_tokens = None
+            label_mask = None
 
         else:
 
@@ -160,13 +166,15 @@ class RagFragmentsModel(Model):
                                       input_text_metadata=input_text_list,
                                       labels=label_tokens,
                                       output_retrieved=True,
+                                      #output_attentions=True
                                       )
 
             loss = torch.mean(model_output.loss)
             results["loss"] = loss
 
+            label_mask = labels["tokens"]['mask']
+
             if not self.training:
-                label_mask = labels["tokens"]['mask']
                 self._update_metrics(model_output, label_tokens, label_mask)
                 self._add_retrieval_info(model_output, label_tokens, results)
 
@@ -177,10 +185,17 @@ class RagFragmentsModel(Model):
 
             with torch.no_grad():
 
+                #results["generator_cross_attentions"] = model_output.generator_cross_attentions
+                #results["generator_dec_attentions"] = model_output.generator_dec_attentions
+                #results["generator_cross_attentions"] = model_output.generator_cross_attentions
+
                 doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1), dim=2)
+
 
                 x = torch.mean(doc_scores_softmax * model_output.retrieved_doc_embeds * self.rag_ndocs, dim=-2)
                 results["retrieved_doc_embeddings"] = x
+                results["retrieved_doc_probs"] = doc_scores_softmax
+                results["retrieved_doc_scores"] = model_output.doc_scores
 
                 generator_enc_last_hidden_state = model_output.generator_enc_last_hidden_state
 
@@ -198,7 +213,14 @@ class RagFragmentsModel(Model):
                 x = torch.mean(x, dim=-2)
                 results["generator_enc_embeddings"] = x
 
-                results["perplexity"] = torch.exp(model_output.loss / generator_indexed.size()[-1])
+                # print(f"Perplexity input: {model_output.loss} {generator_indexed}, {context_mask}")
+
+                if model_output.perplexity is not None:
+                    results["perplexity"] = model_output.perplexity
+                    results["avg_log_likelihood"] = model_output.avg_log_likelihood
+                else:
+                    results["perplexity"] = 0.0
+                    results["avg_log_likelihood"] = 0.0
 
         results["input"] = metadata
 
@@ -245,8 +267,7 @@ class RagFragmentsModel(Model):
         if not self.training:
             with torch.no_grad():
 
-                self.metrics['lm_perplexity'](torch.mean(
-                    model_output.loss / torch.sum(label_mask,(0,1))))
+                self.metrics['lm_perplexity'] = model_output.perplexity
 
                 num_docs = self.rag_ndocs
                 labels_batch_size = label_tokens.size()[0]
@@ -308,8 +329,8 @@ class RagFragmentsModel(Model):
 
         return metrics
 
-    def generate(self, text: Union[str, List],
-                 add_to_memory: bool = True,
+    def generate(self,
+                 text: Union[str, List],
                  max_length: int = 128,
                  min_length: int = 10,
                  repetition_penalty: float = 0.0,
@@ -360,17 +381,13 @@ class RagFragmentsModel(Model):
                                         top_k=top_k,
                                         top_p=top_p,
                                         )
-        # print(f"Generated: {generated}")
+
         generated_strings = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
-        print(f"Generated strings: {generated},{generated_strings}")
 
         generated_list = []
         for i, (gen_ids, gen_string) in enumerate(zip(generated, generated_strings)):
             generated = {"id": i, "text": gen_string}
             generated_list.append(generated)
-
-        # if add_to_memory:
-        #    self.add_to_memory(text=text, add_to_memory=add_to_memory)
 
         return generated_list
 
@@ -410,9 +427,9 @@ class RagFragmentsModel(Model):
 
                     self.memory_id += 1
 
-                if add_to_memory:
-                    # print(f"Add to memory {input_ids}, {attention_mask}, {input_text_list}")
-                    self.model.rag.add_to_memory(input_ids, attention_mask, input_text_list)
+
+                # print(f"Add to memory {input_ids}, {attention_mask}, {input_text_list}")
+                self.model.rag.add_to_memory(input_ids, attention_mask, input_text_list)
 
     def clear_memory(self):
 

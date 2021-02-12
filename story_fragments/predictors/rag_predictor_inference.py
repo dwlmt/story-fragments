@@ -41,12 +41,9 @@ class RagFragmentsInferencePredictor(Predictor):
     ) -> None:
         super().__init__(model, dataset_reader)
 
-        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=4))
-        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
+        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
+        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
 
-        self._input_size = int(os.getenv("SENTENCE_INPUT_SIZE", default=4))
-        self._label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=4))
-        self._step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
         self._keep_embeddings = parse_bool(os.getenv("KEEP_EMBEDDINGS", default="True"))
 
@@ -55,7 +52,7 @@ class RagFragmentsInferencePredictor(Predictor):
         encoder_model_name = str(os.getenv("ENCODER_MODEL_NAME", default="facebook/dpr-question_encoder-multiset-base"))
         encoder_max_length = int(os.getenv("ENCODER_MAX_LENGTH", default=256))
         add_special_tokens = parse_bool(os.getenv("ADD_SPECIAL_TOKENS", default="True"))
-        
+
         self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
                                                                   max_length=generator_max_length,
                                                                   add_special_tokens=add_special_tokens,
@@ -97,6 +94,9 @@ class RagFragmentsInferencePredictor(Predictor):
         model_outputs_list = []
         for example in passages:
 
+            if "label" not in example:
+                continue
+
             results["passages"].append(example)
 
             instance = self._json_to_instance(example)
@@ -104,7 +104,9 @@ class RagFragmentsInferencePredictor(Predictor):
             outputs = self._model.forward_on_instance(instance)
 
             sentiment = self._vader_analyzer.polarity_scores(example["text"])
-            outputs["vader_sentiment"] = sentiment
+            outputs["vader_sentiment"] = sentiment["compound"]
+
+            print(f"Outputs: {outputs}")
 
             if self._keep_embeddings:
                 example["retrieved_doc_embedding"] = outputs["retrieved_doc_embeddings"].tolist()
@@ -139,13 +141,13 @@ class RagFragmentsInferencePredictor(Predictor):
                 if len(y.size()) < len(x.size()):
                     y = torch.unsqueeze(y, dim=0).expand_as(x)
 
-                norm = numpy.linalg.norm(x)
-                x = x / norm
+                #norm = numpy.linalg.norm(x, ord=2)
+                #x = x / norm
 
-                norm = numpy.linalg.norm(y)
-                y = y / norm
+                #norm = numpy.linalg.norm(y, ord=2)
+                #y = y / norm
 
-                print(f"Normalized: {x}, {y}")
+                #print(f"Normalized: {x}, {y}")
 
                 l1_dist = self._l1_distance(x, y)
                 l2_dist = self._l2_distance(x, y)
@@ -177,7 +179,8 @@ class RagFragmentsInferencePredictor(Predictor):
             metrics = vector_distance_metrics("generator_enc_embedding", first_doc_emb, second_doc_emb)
             results["passages"][i]["prediction_metrics"] = {**metrics,**results["passages"][i]["prediction_metrics"]}
 
-            results["passages"][i]["prediction_metrics"]["perplexity"] = first["perplexity"].item()
+            if "perplexity" in first:
+                results["passages"][i]["prediction_metrics"]["perplexity"] = first["perplexity"].item()
 
             results["passages"][i]["prediction_metrics"]["vader_sentiment"] = first["vader_sentiment"]
 

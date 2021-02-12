@@ -45,6 +45,11 @@ class SbertDiscFragmentsModel(Model):
                 num_sequences_to_generate: int = 0,
                 ) -> Dict[str, torch.Tensor]:
 
+        #print(f"Metadata: {metadata}")
+        #print(f"Text: {text}")
+        #print(f"Labels: {labels}")
+        #print(f"Negative Labels: {negative_labels}")
+
         results = {}
 
         input_ids = text["tokens"]['token_ids']
@@ -70,7 +75,6 @@ class SbertDiscFragmentsModel(Model):
                     examples.append(neg_label)
 
             examples_tensor = pad_sequence(examples, batch_first=True, padding_value=0.0)
-
 
             if negative_ids is not None:
                 input_tensor, label_tensor, neg_label_tensor = torch.split(examples_tensor, int(examples_tensor.size()[0] / 3), dim=0)

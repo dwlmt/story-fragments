@@ -470,7 +470,7 @@ class RagMemoryRetriever(RagRetriever):
                 "context_input_ids": context_input_ids,
                 "context_attention_mask": context_attention_mask,
                 "retrieved_doc_embeds": retrieved_doc_embeds,
-                "doc_ids": doc_ids,
+                "doc_ids": doc_ids
             },
             tensor_type=return_tensors,
         )

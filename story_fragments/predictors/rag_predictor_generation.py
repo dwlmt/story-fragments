@@ -29,8 +29,8 @@ class RagFragmentsGenerationPredictor(Predictor):
     ) -> None:
         super().__init__(model, dataset_reader)
 
-        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=4))
-        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
+        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
+        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
 
         self._length_to_generate = int(os.getenv("GENERATE_LENGTH", default=50))
 
@@ -77,7 +77,6 @@ class RagFragmentsGenerationPredictor(Predictor):
                 for j in range(1, self._length_to_generate + 1):
                     next_passage = {}
                     generated = self._model.generate(sentences_joined,
-                                                     add_to_memory=self._add_to_memory,
                                                      max_length=self._max_length,
                                                      min_length=self._min_length,
                                                      repetition_penalty=self._repetition_penalty,

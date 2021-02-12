@@ -14,15 +14,17 @@
 # limitations under the License.
 """RAG model implementation."""
 from collections import defaultdict
-from typing import Optional, Callable, List
+from dataclasses import dataclass
+from typing import Optional, Callable, List, Tuple
 
 import torch
-from entmax import Entmax15Loss, entmax15
+from entmax import Entmax15Loss, entmax15, EntmaxBisectLoss, entmax_bisect
 from torch.nn import functional as F
 from torch.nn.functional import one_hot
 from torch.nn.utils.rnn import pad_sequence
 from transformers import DPRContextEncoder, DPRContextEncoderTokenizerFast, \
     PretrainedConfig, PreTrainedModel, RagConfig, BeamSearchScorer, LogitsProcessorList, BeamScorer
+from transformers.file_utils import ModelOutput
 from transformers.models.rag.modeling_rag import RetrievAugLMOutput, RagModel, RagTokenForGeneration, \
     RetrievAugLMMarginOutput
 from transformers.utils import logging
@@ -38,6 +40,26 @@ def div(x, y):
     else:
         return x / y
 
+@dataclass
+class RetrieveAugMemLMMarginOutput(ModelOutput):
+    loss: Optional[torch.FloatTensor] = None
+    perplexity: Optional[torch.FloatTensor] = None
+    avg_log_likelihood: Optional[torch.FloatTensor] = None
+    logits: torch.FloatTensor = None
+    doc_scores: torch.FloatTensor = None
+    past_key_values: Optional[List[torch.FloatTensor]] = None
+    retrieved_doc_embeds: Optional[torch.FloatTensor] = None
+    retrieved_doc_ids: Optional[torch.LongTensor] = None
+    context_input_ids: Optional[torch.LongTensor] = None
+    context_attention_mask: Optional[torch.LongTensor] = None
+    question_encoder_last_hidden_state: Optional[torch.FloatTensor] = None
+    question_enc_hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    question_enc_attentions: Optional[Tuple[torch.FloatTensor]] = None
+    generator_enc_last_hidden_state: Optional[torch.FloatTensor] = None
+    generator_enc_hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    generator_enc_attentions: Optional[Tuple[torch.FloatTensor]] = None
+    generator_dec_hidden_states: Optional[Tuple[torch.FloatTensor]] = None
+    generator_dec_attentions: Optional[Tuple[torch.FloatTensor]] = None
 
 class NGramIterator:
     """ N-Gram iterator for a list.
@@ -147,7 +169,7 @@ class RagMemoryModel(RagModel):
                         retriever_outputs["context_input_ids"],
                         retriever_outputs["context_attention_mask"],
                         retriever_outputs["retrieved_doc_embeds"],
-                        retriever_outputs["doc_ids"],
+                        retriever_outputs["doc_ids"]
                     )
 
                     # set to correct device
@@ -217,7 +239,7 @@ class RagMemoryModel(RagModel):
             retrieved_doc_embeds = None
             retrieved_doc_ids = None
 
-        return RetrievAugLMOutput(
+        return RetrievAugLMMarginOutput(
             logits=gen_outputs.logits,
             doc_scores=doc_scores,
             past_key_values=gen_outputs.past_key_values,
@@ -272,6 +294,9 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         self.rag = RagMemoryModel(config=config, question_encoder=question_encoder, generator=generator,
                                   retriever=retriever)
 
+        if self.config.entmax:
+            pass #self.entmax_alpha = torch.tensor(1.5, requires_grad=True).half()
+
     def forward(
             self,
             input_ids=None,
@@ -322,6 +347,8 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         )
 
         loss = None
+        perplexity = None
+        avg_ll = None
         logits = outputs.logits
         doc_scores = outputs.doc_scores
         context_input_ids = outputs.context_input_ids
@@ -331,7 +358,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             rag_logprobs = self.marginalize(logits, doc_scores, n_docs)
 
             # #print(f"nll input: {outputs.logits.size()}, {outputs.doc_scores.size()}, {labels.size()} ")
-            loss = self.get_nll(
+            loss, perplexity, avg_ll = self.get_nll(
                 rag_logprobs,
                 doc_scores,
                 labels,
@@ -353,8 +380,10 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         if do_marginalize:
             logits = self.marginalize(logits, outputs.doc_scores, n_docs)
 
-        return RetrievAugLMMarginOutput(
+        return RetrieveAugMemLMMarginOutput(
             loss=loss,
+            perplexity=perplexity,
+            avg_log_likelihood=avg_ll,
             logits=logits,
             doc_scores=outputs.doc_scores,
             past_key_values=outputs.past_key_values,
@@ -379,47 +408,56 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             [target[:, 1:], target.new(target.shape[0], 1).fill_(self.config.generator.pad_token_id)], 1
         )
 
-        def _mask_pads(ll, smooth_obj):
+        def _mask_pads(ll):#, smooth_obj):
             pad_mask = target.eq(self.config.generator.pad_token_id)
             if pad_mask.any():
                 ll.masked_fill_(pad_mask, 0.0)
-                smooth_obj.masked_fill_(pad_mask, 0.0)
-            return ll.squeeze(-1), smooth_obj.squeeze(-1)
+                #smooth_obj.masked_fill_(pad_mask, 0.0)
+            return ll.squeeze(-1)#, smooth_obj.squeeze(-1)
 
         target = target.unsqueeze(-1)
         assert target.dim() == rag_logprobs.dim()
 
         if not self.config.entmax:
             ll = rag_logprobs.gather(dim=-1, index=target)
-            smooth_obj = rag_logprobs.sum(dim=-1, keepdim=True)  # total sum of all (normalised) logits
-            ll, smooth_obj = _mask_pads(ll, smooth_obj)
+            #smooth_obj = rag_logprobs.sum(dim=-1, keepdim=True)  # total sum of all (normalised) logits
+            #ll, smooth_obj = _mask_pads(ll, smooth_obj)
+            ll = _mask_pads(ll)
             ll = ll.sum(1)  # sum over tokens
             # smooth_obj = smooth_obj.sum(1)
 
             nll_loss = -ll
             # smooth_loss = -smooth_obj
 
-            if reduce_loss:
-                nll_loss = nll_loss.sum()
+            #if reduce_loss:
+                #nll_loss = nll_loss.sum()
                 # smooth_loss = smooth_loss.sum()
 
-            eps_i = epsilon / rag_logprobs.size(-1)
-            loss = (1.0 - epsilon) * nll_loss  # + eps_i * smooth_loss
-            return loss
+            #eps_i = epsilon / rag_logprobs.size(-1)
+            loss = nll_loss #(1.0 - epsilon) * nll_loss + eps_i * smooth_loss
         else:
-            entmax_loss = Entmax15Loss(k=self.config.entmax_k, ignore_index=self.config.pad_token_id, reduction="sum")
+            entmax_loss = Entmax15Loss(k=self.config.entmax_k, ignore_index=self.config.pad_token_id,
+                                           reduction="sum")
+
             target = torch.squeeze(target, dim=2)
 
-            #logits = - rag_logprobs
-            #logits_sum = torch.sum(logits, dim=-1, keepdim=True)
-            #n = logits.size()[-1]
+            rag_probs = torch.exp(rag_logprobs)
 
-            #logits = logits - (logits_sum / n)
-            
-            #print(f"Logits: {torch.exp(rag_logprobs)}")
-            loss = entmax_loss(torch.exp(rag_logprobs).view(rag_logprobs.size()[0] * rag_logprobs.size()[1], -1),
+            loss = entmax_loss(rag_probs.view(rag_logprobs.size()[0] * rag_logprobs.size()[1], -1),
                                target.view(target.size()[0] * target.size()[1]))
-            return loss
+
+        with torch.no_grad():
+            target = torch.squeeze(target, dim=0)
+            label_mask = (target != self.config.pad_token_id)
+            n_tokens = torch.sum(
+                label_mask.view(label_mask.size()[0] * label_mask.size()[1]))
+
+            # Calculate perplexity
+            perplexity = torch.exp(loss / n_tokens)# / n_docs)
+
+            avg_ll = (-loss / n_tokens) #/ n_docs)
+
+        return loss, perplexity, avg_ll
 
     def count_n_grams(self, tokens, n):
         n_grams = defaultdict(int)
@@ -485,16 +523,10 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
     def marginalize(self, seq_logits, doc_scores, n_docs=None):
 
         n_docs = n_docs if n_docs is not None else self.config.n_docs
-        # print(f"Seq Logits: {seq_logits.size()}")
 
-        # RAG-token marginalization
-        #if not self.config.entmax:
         seq_logprobs = torch.nn.functional.log_softmax(seq_logits, dim=-1).view(
             seq_logits.shape[0] // n_docs, n_docs, -1, seq_logits.size(-1)
         )
-        #else:
-        #    seq_logprobs  = torch.log(entmax15(seq_logits, dim=-1, k=self.config.entmax_k)).view(
-        #        seq_logits.shape[0] // n_docs, n_docs, -1, seq_logits.size(-1))
 
         doc_logprobs = torch.log_softmax(doc_scores, dim=1)
         log_prob_sum = seq_logprobs + doc_logprobs.unsqueeze(-1).unsqueeze(-1)
@@ -824,6 +856,8 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             if not self.config.entmax:
                 probs = F.softmax(scores, dim=-1)
             else:
+                self.entmax_alpha = self.entmax_alpha.to(scores.device)
+                #probs = entmax_bisect(scores, dim=-1, alpha=self.entmax_alpha)
                 probs =  entmax15(scores, dim=-1, k=self.config.entmax_k)
 
             next_tokens = torch.multinomial(probs, num_samples=1).squeeze(1)

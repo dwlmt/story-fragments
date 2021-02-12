@@ -29,10 +29,8 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
     ) -> None:
         super().__init__(model, dataset_reader)
 
-        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=4))
-        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
-
-        self._length_to_generate = int(os.getenv("GENERATE_LENGTH", default=50))
+        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
+        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
 
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
         self._min_length = int(os.getenv("MIN_LENGTH", default=64))
@@ -71,7 +69,6 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
             print(f"Generate from: {sentences_joined}")
 
             generated = self._model.generate(sentences_joined,
-                                             add_to_memory=self._add_to_memory,
                                              max_length=self._max_length,
                                              min_length=self._min_length,
                                              repetition_penalty=self._repetition_penalty,
