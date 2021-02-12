@@ -43,11 +43,12 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
                  data_url: str,
                  data_download_num_bytes: Optional[int],
                  data_download_checksum: Optional[str],
-                 context_size: int = 1,
-                 label_size: int = 1,
+                 input_size: int = 1,
+                 target_size: int = 1,
                  step_size: int = 1,
-                 batch_size: int = 100,
+                 batch_size: int = 64,
                  dummy: bool = False,
+                 add_negative_examples: bool = False,
                  **kwargs):
         """ Generic config for reading a dataset in a interleaved or round robin fashion.
 
@@ -55,9 +56,9 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
             data_url (str): The url for the compressed jsonl file.
             data_download_num_bytes (int): Number of bytes of the datafile.
             data_download_checksum (str): SHA-256 checksum for the data file.
-            context_size (int): Size in sentences of the context text to condition on.
-            label_size (int): Size in sentences of the text label to predict.
-            step_size (int): Sliding window step to pass over the text.
+            input_size (int): Size in sentences of the context input_text to condition on.
+            target_size (int): Size in sentences of the input_text target_text to predict.
+            step_size (int): Sliding window step to pass over the input_text.
             batch_size (int): Number of stories to iterate over in parallel.
             dummy (bool): If true then only yield the first 10000 examples.
             **kwargs: Pass to parent.
@@ -65,11 +66,12 @@ class WritingPromptsInterleavedHfDatasetConfig(datasets.BuilderConfig):
         self.data_url = data_url
         self.data_download_num_bytes = data_download_num_bytes
         self.data_download_checksum = data_download_checksum
-        self.context_size = context_size
-        self.label_size = label_size
+        self.input_size = input_size
+        self.target_size = target_size
         self.step_size = step_size
         self.batch_size = batch_size
         self.dummy = dummy
+        self.add_negative_examples = add_negative_examples
 
         super(WritingPromptsInterleavedHfDatasetConfig, self).__init__(**kwargs)
 
@@ -86,6 +88,48 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_url=_URL,
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 dummy=True,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_dummy_4_label_1_step_4",
+                                                 description="Writing Prompts dummy for testng purposes.",
+                                                 data_url=_URL,
+                                                 input_size=4,
+                                                 target_size=1,
+                                                 step_size=4,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 dummy=True,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_dummy_4_label_4_step_4",
+                                                 description="Writing Prompts dummy for testng purposes.",
+                                                 data_url=_URL,
+                                                 input_size=4,
+                                                 target_size=4,
+                                                 step_size=4,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 dummy=True,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_dummy_6_label_6_step_6",
+                                                 description="Writing Prompts dummy for testng purposes.",
+                                                 data_url=_URL,
+                                                 input_size=6,
+                                                 target_size=6,
+                                                 step_size=6,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 dummy=True,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_dummy_4_label_4_step_4_neg",
+                                                 description="Writing Prompts dummy for testng purposes.",
+                                                 data_url=_URL,
+                                                 input_size=4,
+                                                 target_size=4,
+                                                 step_size=4,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 dummy=True,
+                                                 add_negative_examples=True,
                                                  version=_VERSION),
         WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_1_label_1_step_1",
                                                  description="Writing Prompts with one sentence of context, "
@@ -94,11 +138,49 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
                                                  version=_VERSION),
-        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_3_label_3_step_3",
-                                                 description="Writing Prompts with 3 sentence steps.",
-                                                 context_size=3,
-                                                 label_size=3,
-                                                 step_size=3,
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_4_label_1_step_4",
+                                                 description="Writing Prompts with 4 sentence steps.",
+                                                 input_size=4,
+                                                 target_size=1,
+                                                 step_size=4,
+                                                 data_url=_URL,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_4_label_4_step_4",
+                                                 description="Writing Prompts with 4 sentence steps.",
+                                                 input_size=4,
+                                                 target_size=4,
+                                                 step_size=4,
+                                                 data_url=_URL,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_6_label_6_step_6_batch_1",
+                                                 description="Writing Prompts with 6 sentence steps.",
+                                                 input_size=6,
+                                                 target_size=6,
+                                                 step_size=6,
+                                                 batch_size=1,
+                                                 data_url=_URL,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_6_label_6_step_6",
+                                                 description="Writing Prompts with 6 sentence steps.",
+                                                 input_size=6,
+                                                 target_size=6,
+                                                 step_size=6,
+                                                 data_url=_URL,
+                                                 data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
+                                                 data_download_checksum=_DOWNLOAD_CHECKSUM,
+                                                 version=_VERSION),
+        WritingPromptsInterleavedHfDatasetConfig(name="writingprompts_context_6_label_6_step_6_neg",
+                                                 description="Writing Prompts with 4 sentence steps.",
+                                                 input_size=6,
+                                                 target_size=6,
+                                                 step_size=6,
+                                                 add_negative_examples=True,
                                                  data_url=_URL,
                                                  data_download_num_bytes=_DOWNLOAD_NUM_BYTES,
                                                  data_download_checksum=_DOWNLOAD_CHECKSUM,
@@ -127,8 +209,9 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
                     "episode_id": datasets.Value("string"),  # The original id.
                     "episode_seq_num": datasets.Value("int32"),  # Unique sequence number for the episode.
                     "title": datasets.Value("string"),  # The title of the work, or for WP the prompt.
-                    "text": datasets.Value("string"),  # The context text field.
-                    "label": datasets.Value("string"),  # The text to predict.
+                    "text": datasets.Value("string"),  # The context input_text field.
+                    "label": datasets.Value("string"),  # The input_text to predict.
+                    "negative_labels": [datasets.Value("string")],  # The input_text to predict.
                     "episode_done": datasets.Value("bool"),  # True for the last passage in an episode.
                     "episode_begun": datasets.Value("bool")  # True for the first passage in an episode.
 
@@ -172,12 +255,14 @@ class WritingPromptsInterleavedDataset(datasets.GeneratorBasedBuilder):
 
     def _generate_examples(self, filepath, split):
         """ Yields an example for each story split by stories.
-            The prompt is the title but also prepended to the main text.
+            The prompt is the title but also prepended to the main input_text.
         """
 
         with jsonlines.open(filepath, mode='r') as reader:
-            for example in interleave_examples(reader, self.config.batch_size, self.config.context_size,
-                                               self.config.label_size,
+            for example in interleave_examples(reader, self.config.batch_size, self.config.input_size,
+                                               self.config.target_size,
                                                self.config.step_size,
-                                               dummy=self.config.dummy):
+                                               dummy=self.config.dummy,
+                                               contractions=True,
+                                               add_negative_examples=self.config.add_negative_examples):
                 yield example['id'], example

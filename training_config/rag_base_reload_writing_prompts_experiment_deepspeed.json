@@ -1,0 +1,88 @@
+{
+  "dataset_reader": {
+    "type": "interleaving",
+    "readers": {
+      "writingprompts-interleaved":
+      {
+        "type": "writingprompts-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "lazy": true
+      }
+      ,
+      "wikiplots-interleaved":
+      {
+        "type": "wikiplots-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "lazy": true
+      }
+    }
+  },
+  "train_data_path": "{\"wikiplots-interleaved\": \"wikiplots_context_4_label_4_step_4/train\", \"writingprompts-interleaved\": \"writingprompts_context_4_label_4_step_4/train\"}",
+  "validation_data_path": "{\"wikiplots-interleaved\": \"wikiplots_context_4_label_4_step_4/validation\", \"writingprompts-interleaved\": \"writingprompts_context_4_label_4_step_4/validation\"}",
+  "data_loader": {
+    "batch_size": 8,
+    "batches_per_epoch": 20000
+  },
+  "validation_data_loader": {
+    "batch_size": 8,
+    "batches_per_epoch": 2000
+  },
+  "model": {
+    "type": "from_archive",
+    "archive_file": "/home/s1569885/runs/rag_base_writing_prompts_55990_2020_11_28_181815/model.tar.gz"
+  },
+  "trainer": {
+    "type": "deepspeed",
+    "use_amp": false,
+    "optimizer": {
+      "type": "adam",
+        "lr": 3e-06,
+        "eps": 1e-06
+    },
+    "deepspeed_config": {
+      "optimizer": {
+        "params": {
+          "lr": 3e-06,
+          "eps": 1e-06
+        },
+        "type": "Adam"
+      },
+      "gradient_clipping": 1.0,
+      "amp": {
+        "enabled": false
+      },
+      "fp16": {
+        "enabled": true
+      },
+      "zero_optimization": {
+        "stage": 2,
+        "allgather_partitions": true,
+        "overlap_comm": true,
+        "reduce_scatter": true,
+        "reduce_bucket_size": 15000000,
+        "allgather_bucket_size": 15000000,
+        "contiguous_gradients" : true,
+        "cpu_offload": true
+      },
+     "fp32_allreduce": false
+    },
+    "num_epochs": 20,
+    "patience": 3,
+    "num_gradient_accumulation_steps": 2,
+    "checkpointer": {
+      "num_serialized_models_to_keep": 1
+    }
+  },
+  "distributed": {
+    "cuda_devices": [
+      0,
+      1,
+      2,
+      3
+    ]
+  }
+}
