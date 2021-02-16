@@ -2,7 +2,7 @@ import more_itertools
 from blingfire import text_to_sentences
 
 
-def input_to_passages(inputs, sentence_batch_size: int = 4, sentence_step_size:int = 4):
+def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size: int = 6, sentence_step_size: int = 6, max_passages: int = None):
 
     labels = []
 
@@ -28,9 +28,18 @@ def input_to_passages(inputs, sentence_batch_size: int = 4, sentence_step_size:i
         raise ValueError("Input text or sentences must be provided.")
   
     if sentences is not None:
-        sentences = list(more_itertools.windowed(sentences, n=sentence_batch_size, fillvalue=" ",
+        sentences = list(more_itertools.windowed(sentences, n=sentence_batch_size + sentence_label_size, fillvalue=" ",
                                                 step=sentence_step_size))
-        passages = [{"id": f"{i}", "seq_num": i, "text": " ".join(s), "prompt": True} for i, s in enumerate(sentences)]
+
+        passages = [{"id": f"{i}", "seq_num": i, "text": " ".join(s[: sentence_batch_size]),
+                     "label": " ".join(s[-sentence_label_size:]), "prompt": True} for i, s in enumerate(sentences)]
+
+
+        if sentence_step_size < sentence_batch_size or sentence_step_size < sentence_label_size:
+            for p, s in zip(passages, sentences):
+                #print(f"{p}, {s}")
+                sentences_offset = s[sentence_batch_size - sentence_step_size:sentence_batch_size]
+                p["text_offset"] = " ".join(sentences_offset)
     else:
         passages = [{"id": f"{i}", "seq_num": i, "text": s, "prompt": True} for i, s in enumerate(passages)]
 
@@ -39,5 +48,8 @@ def input_to_passages(inputs, sentence_batch_size: int = 4, sentence_step_size:i
             labels += [" "] * (len(labels) - len(passages))
         for p, l in zip(passages,labels):
             p["label"] = l
+
+    if max_passages is not None:
+        passages = passages[:max_passages]
             
     return passages

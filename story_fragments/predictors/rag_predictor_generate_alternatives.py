@@ -30,7 +30,9 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
         super().__init__(model, dataset_reader)
 
         self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
+        self._sentence_label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=6))
         self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
+        self._max_passages = int(os.getenv("MAX_PASSAGES", default=1000000))
 
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
         self._min_length = int(os.getenv("MIN_LENGTH", default=64))
@@ -61,7 +63,8 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
         results["generated"] = []
 
         passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
-                                     sentence_step_size=self._sentence_step_size)
+                                     sentence_label_size=self._sentence_label_size,
+                                     sentence_step_size=self._sentence_step_size,  max_passages=self._max_passages)
 
         for i, batch in enumerate(passages):
             sentences_joined = batch['text']

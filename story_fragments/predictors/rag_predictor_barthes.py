@@ -44,7 +44,10 @@ class RagFragmentsBarthesPredictor(Predictor):
         super().__init__(model, dataset_reader)
 
         self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
+        self._sentence_label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=6))
         self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
+        self._max_passages = int(os.getenv("MAX_PASSAGES", default=1000000))
+
 
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
         self._keep_embeddings = parse_bool(os.getenv("KEEP_EMBEDDINGS", default="False"))
@@ -55,9 +58,8 @@ class RagFragmentsBarthesPredictor(Predictor):
         encoder_max_length = int(os.getenv("ENCODER_MAX_LENGTH", default=256))
         add_special_tokens = parse_bool(os.getenv("ADD_SPECIAL_TOKENS", default="True"))
 
-        self._peak_width = int(os.getenv("PEAK_WIDTH", default=3))
-        self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=5))
 
+        self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=3))
         self._peak_prominence = float(os.getenv("PEAK_PROMINENCE", default=0.10))
         self._peak_threshold = float(os.getenv("PEAK_THRESHOLD", default=0.025))
         self._peak_height = float(os.getenv("PEAK_HEIGHT", default=0.025))
@@ -97,7 +99,8 @@ class RagFragmentsBarthesPredictor(Predictor):
         results["passages"] = []
 
         passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
-                                     sentence_step_size=self._sentence_step_size)
+                                     sentence_label_size=self._sentence_label_size,
+                                     sentence_step_size=self._sentence_step_size, max_passages=self._max_passages)
 
         # Set all the metrics to 0.
         for p in passages:
