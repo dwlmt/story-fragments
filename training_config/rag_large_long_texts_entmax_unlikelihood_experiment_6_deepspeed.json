@@ -121,7 +121,7 @@
       },
      "fp32_allreduce": false
     },
-    "num_epochs":  20,
+    "num_epochs":  40,
     "patience": 3,
     "num_gradient_accumulation_steps": 1,
     "checkpointer": {
@@ -131,7 +131,9 @@
   "distributed": {
     "cuda_devices": [
       0,
-      1
+      1,
+      2,
+      3
     ]
   }
 }
