@@ -45,9 +45,6 @@ for i in "${ScratchPathArray[@]}"; do
   fi
 done
 
-# Deletes all scratch directories older than a week to cleanup
-find ${SCRATCH_HOME} -type d -name "*" -mtime +8 -printf "%T+ %p\n" | sort | cut -d ' ' -f 2- | sed -e 's/^/"/' -e 's/$/"/' | xargs rm -rf
-
 echo ${SCRATCH_HOME}
 
 export EXP_ROOT="${CLUSTER_HOME}/git/story-fragments"
@@ -59,6 +56,7 @@ export ALLENNLP_CACHE_ROOT="${SCRATCH_HOME}/allennlp_cache/"
 rm -rf "${SCRATCH_HOME}/allennlp_cache/"
 
 export HF_DATASETS_CACHE="${SCRATCH_HOME}/huggingface_cache/"
+#rm -rf "${HF_DATASETS_CACHE}"
 
 # Ensure the scratch home exists and CD to the experiment root level.
 cd "${EXP_ROOT}" # helps AllenNLP behave
@@ -68,8 +66,14 @@ mkdir -p ${SERIAL_DIR}
 echo "============"
 echo "ALLENNLP Task========"
 
-allennlp train --file-friendly-logging --include-package story_fragments \
-  --serialization-dir ${SERIAL_DIR}/ ${EXP_CONFIG}
+echo "${RECOVER_PATH}"
+if [ -z "${RECOVER_PATH}" ];
+then
+  allennlp train --file-friendly-logging --include-package story_fragments \
+    --serialization-dir ${SERIAL_DIR}/ ${EXP_CONFIG};
+else :
+  allennlp train --file-friendly-logging --include-package story_fragments \
+  --recover  --serialization-dir ${RECOVER_PATH} ${EXP_CONFIG}; fi
 
 echo "============"
 echo "ALLENNLP Task finished"

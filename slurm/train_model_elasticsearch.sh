@@ -47,9 +47,6 @@ for i in "${ScratchPathArray[@]}"; do
   fi
 done
 
-# Deletes all scratch directories older than a week to cleanup
-find ${SCRATCH_HOME} -type d -name "*" -mtime +8 -printf "%T+ %p\n" | sort | cut -d ' ' -f 2- | sed -e 's/^/"/' -e 's/$/"/' | xargs rm -rf
-
 echo ${SCRATCH_HOME}
 
 export EXP_ROOT="${CLUSTER_HOME}/git/story-fragments"
@@ -59,6 +56,8 @@ export SERIAL_DIR="${SCRATCH_HOME}/${EXP_ID}"
 
 export ALLENNLP_CACHE_ROOT="${SCRATCH_HOME}/allennlp_cache/"
 rm -rf "${SCRATCH_HOME}/allennlp_cache/"
+
+export HF_DATASETS_CACHE="${SCRATCH_HOME}/huggingface_cache/"
 
 ${ES_INSTALL_ROOT}/bin/elasticsearch -Epath.data=/${SCRATCH_HOME}/elasticsearch/data -d -p "${SCRATCH_HOME}/elasticsearch_pid"
 sleep 60
