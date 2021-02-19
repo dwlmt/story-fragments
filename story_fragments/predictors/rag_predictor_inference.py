@@ -115,7 +115,7 @@ class RagFragmentsInferencePredictor(Predictor):
             if self._keep_embeddings:
                 example["retrieved_doc_embedding"] = outputs["retrieved_doc_embeddings"].tolist()
                 example["generator_enc_embedding"] = outputs["generator_enc_embeddings"].tolist()
-                #example["question_enc_embedding"] = outputs["question_enc_embeddings"].tolist()
+                example["generator_dec_embedding"] = outputs["generator_dec_embeddings"].tolist()
 
             model_outputs_list.append(outputs)
 
@@ -162,16 +162,11 @@ class RagFragmentsInferencePredictor(Predictor):
                 res_dict[f"{name}_l1_dist"] = l1_dist.item()
                 res_dict[f"{name}_l2_dist"] = l2_dist.item()
                 res_dict[f"{name}_cosine_sim"] = cosine_sim.item()
-                res_dict[f"{name}_cosine_dist"] = cosine_dist.item()
                 res_dict[f"{name}_dot_product"] = dot_product.item()
                 res_dict[f"{name}_wasserstein_dist"] = wass_dist
 
                 return  res_dict
 
-            first_doc_emb = torch.tensor(first["retrieved_doc_embeddings"])
-            second_doc_emb = torch.tensor(second["retrieved_doc_embeddings"])
-            metrics = vector_distance_metrics("retrieved_doc_embedding", first_doc_emb, second_doc_emb)
-            results["passages"][i]["prediction_metrics"] = metrics
 
             first_doc_emb = torch.tensor(first["retrieved_doc_embeddings"])
             second_doc_emb = torch.tensor(second["retrieved_doc_embeddings"])
@@ -182,6 +177,11 @@ class RagFragmentsInferencePredictor(Predictor):
             second_doc_emb = torch.tensor(second["generator_enc_embeddings"])
             metrics = vector_distance_metrics("generator_enc_embedding", first_doc_emb, second_doc_emb)
             results["passages"][i]["prediction_metrics"] = {**metrics,**results["passages"][i]["prediction_metrics"]}
+
+            first_doc_emb = torch.tensor(first["generator_dec_embeddings"])
+            second_doc_emb = torch.tensor(second["generator_dec_embeddings"])
+            metrics = vector_distance_metrics("generator_dec_embedding", first_doc_emb, second_doc_emb)
+            results["passages"][i]["prediction_metrics"] = {**metrics, **results["passages"][i]["prediction_metrics"]}
 
             if "perplexity" in first:
                 results["passages"][i]["prediction_metrics"]["perplexity"] = first["perplexity"].item()

@@ -60,7 +60,7 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
         results = {}
 
         results["inputs"] = inputs
-        results["generated"] = []
+        results["passages"] = []
 
         passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
                                      sentence_label_size=self._sentence_label_size,
@@ -96,7 +96,7 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
             batch["alternatives"] = alternatives
 
             print(f"Generated: {batch}")
-            results["generated"].append(batch)
+            results["passages"].append(batch)
 
             if self._add_to_memory:
                 print(f"Add to memory: {sentences_joined}")

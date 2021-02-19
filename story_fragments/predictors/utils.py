@@ -1,6 +1,9 @@
+import re
+
 import more_itertools
 from blingfire import text_to_sentences
 
+_RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
 def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size: int = 6, sentence_step_size: int = 6, max_passages: int = None):
 
@@ -10,7 +13,8 @@ def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size:
     if "sentences" in inputs and len(inputs["sentences"]) > 0:
         sentences = inputs["sentences"]
     elif "text" in inputs and len(inputs["text"]) > 0:
-        sentences = text_to_sentences(inputs["text"]).split('\n')
+        text = _RE_COMBINE_WHITESPACE.sub(" ", inputs["text"]).strip()
+        sentences = text_to_sentences(text).split('\n')
     elif "passages" in inputs and len(inputs["passages"]) > 0:
         passages = []
         labels = []

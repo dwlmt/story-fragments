@@ -47,6 +47,7 @@ class RagFragmentsModel(Model):
                  memory_buffer=1000,
                  memory_lru: bool = True,
                  combined_n_docs: int = 5,
+                 rag_text_concat_first: bool = False,
                  entmax: bool = False,
                  entmax_k: int = 512,
                  unlikelihood_ratio: float = 1.0,
@@ -79,11 +80,14 @@ class RagFragmentsModel(Model):
         config.combined_n_docs = combined_n_docs
         config.context_encoder = context_encoder
 
+        config.rag_text_concat_first = rag_text_concat_first
+
         config.entmax = entmax
         config.entmax_k = entmax_k
 
         config.unlikelihood_beta = unlikelihood_beta
         config.unlikelihood_ratio = unlikelihood_ratio
+
 
         self.retriever = RagMemoryRetriever.from_pretrained(retriever_name,
                                                             config=config)
@@ -95,7 +99,7 @@ class RagFragmentsModel(Model):
                                                                                             config=config,
                                                                                             retriever=self.retriever)
 
-        self.rag_ndocs = ndocs
+        self.rag_ndocs = combined_n_docs
 
         self.rotate_grad_training = rotate_grad_training
         self.rotate_grad_parts_list = deque(["question_encoder", "encoder", "decoder"])
@@ -117,9 +121,7 @@ class RagFragmentsModel(Model):
                 labels: TextFieldTensors = None,
                 negative_labels: TextFieldTensors = None,
                 metadata: List[Dict[str, Any]] = None,
-                dataset: List[str] = None,
-                num_sequences_to_generate: int = 0,
-                inference: bool = False
+                dataset: List[str] = None
                 ) -> Dict[str, torch.Tensor]:
 
         logger.debug(f"Input: {metadata}")
@@ -145,38 +147,46 @@ class RagFragmentsModel(Model):
 
         if labels is None:
 
-            model_output = self.model(input_ids=input_ids,
-                                      attention_mask=input_mask,
-                                      input_text_metadata=input_text_list,
-                                      output_retrieved=True,
-                                      #output_attentions=True
-                                      )
-
             label_tokens = None
             label_mask = None
 
         else:
-
             label_tokens = labels["tokens"]['token_ids']
 
-            # print(f"Model Inputs: {input_ids.size()}, {label_tokens.size()}")
+        # print(f"Model Inputs: {input_ids.size()}, {label_tokens.size()}")
 
+        if self.rag_ndocs > 0:
             model_output = self.model(input_ids=input_ids,
                                       attention_mask=input_mask,
                                       input_text_metadata=input_text_list,
                                       labels=label_tokens,
                                       output_retrieved=True,
-                                      #output_attentions=True
+                                      output_hidden_states=True,
+                                      n_docs = self.rag_ndocs
+                                      #output_attentions=True,
+                                      )
+        else:
+            doc_scores = torch.ones(input_ids.size()[0],1).to(input_ids.device)
+
+            model_output = self.model(context_input_ids=input_ids,
+                                      context_attention_mask=input_mask,
+                                      doc_scores=doc_scores,
+                                      input_text_metadata=input_text_list,
+                                      labels=label_tokens,
+                                      output_retrieved=True,
+                                      output_hidden_states=True,
+                                      n_docs=self.rag_ndocs
+                                      # output_attentions=True,
                                       )
 
-            loss = torch.mean(model_output.loss)
-            results["loss"] = loss
+        loss = torch.mean(model_output.loss)
+        results["loss"] = loss
 
-            label_mask = labels["tokens"]['mask']
+        label_mask = labels["tokens"]['mask']
 
-            if not self.training:
-                self._update_metrics(model_output, label_tokens, label_mask)
-                self._add_retrieval_info(model_output, label_tokens, results)
+        if not self.training:
+            self._update_metrics(model_output, label_tokens, label_mask)
+            self._add_retrieval_info(model_output, label_tokens, results, input_ids.size()[0])
 
         if self.training and self.rotate_grad_training:
             self.rotate_grad_parts_list.rotate(-1)
@@ -184,22 +194,27 @@ class RagFragmentsModel(Model):
         if not self.training:
 
             with torch.no_grad():
+                #print(f"Output: {model_output}")
 
-                #results["generator_cross_attentions"] = model_output.generator_cross_attentions
-                #results["generator_dec_attentions"] = model_output.generator_dec_attentions
-                #results["generator_cross_attentions"] = model_output.generator_cross_attentions
+                actual_n_docs = max(self.rag_ndocs, 1)
 
-                doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1), dim=2)
+                if self.rag_ndocs > 0:
+                    doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1), dim=2)
+                    doc_marginalised = doc_scores_softmax * model_output.retrieved_doc_embeds * actual_n_docs
+                    x = torch.mean(doc_marginalised, dim=-2)
+                    #y = torch.max(doc_marginalised, dim=-2).values
+                    results["retrieved_doc_embeddings"] = x #torch.cat((x,y), dim=-1)
+                    #logger.info(f"retrieved_doc_embeddings size: {results['retrieved_doc_embeddings'].size()}")
 
-
-                x = torch.mean(doc_scores_softmax * model_output.retrieved_doc_embeds * self.rag_ndocs, dim=-2)
-                results["retrieved_doc_embeddings"] = x
-                results["retrieved_doc_probs"] = doc_scores_softmax
-                results["retrieved_doc_scores"] = model_output.doc_scores
+                    results["retrieved_doc_probs"] = doc_scores_softmax
+                    results["retrieved_doc_scores"] = model_output.doc_scores
 
                 generator_enc_last_hidden_state = model_output.generator_enc_last_hidden_state
 
-                context_mask = model_output.context_attention_mask.bool()
+                if self.rag_ndocs > 0:
+                    context_mask = model_output.context_attention_mask.bool()
+                else:
+                    context_mask = input_mask
 
                 if generator_enc_last_hidden_state.size()[0] != batch_size:
                     generator_enc_last_hidden_state = torch.unsqueeze(generator_enc_last_hidden_state, dim=0)
@@ -209,12 +224,40 @@ class RagFragmentsModel(Model):
                     doc_scores_softmax = torch.unsqueeze(doc_scores_softmax, dim=-1)
 
                 generator_indexed = generator_enc_last_hidden_state[context_mask]
-                x = torch.mean((doc_scores_softmax * generator_indexed * self.rag_ndocs), dim=-2)
-                x = torch.mean(x, dim=-2)
-                results["generator_enc_embeddings"] = x
+                marginalised = doc_scores_softmax * generator_indexed * actual_n_docs
+                x = torch.mean(torch.mean((marginalised), dim=-2), dim=-2)
+                #y = torch.max(torch.max((marginalised), dim=-2).values, dim=-2).values
+                gen_enc_emb = x #torch.cat((x,y),dim=-1)
 
-                # print(f"Perplexity input: {model_output.loss} {generator_indexed}, {context_mask}")
+                results["generator_enc_embeddings"] = gen_enc_emb
+                #logger.info(f"generator_enc_embeddings size: {results['generator_enc_embeddings'].size()}")
 
+                decoder_hidden_states = model_output.generator_dec_hidden_states
+
+                if decoder_hidden_states is not None:
+                    decoder_hidden_states = decoder_hidden_states[0]
+
+                    decoder_hidden_states = decoder_hidden_states.view(int(decoder_hidden_states.size()[0] / actual_n_docs),
+                                                                       actual_n_docs, decoder_hidden_states.size()[1], -1)
+
+                    if decoder_hidden_states.size()[0] != batch_size:
+                        decoder_hidden_states = torch.unsqueeze(decoder_hidden_states, dim=0)
+
+                    while len(doc_scores_softmax.size()) < len(decoder_hidden_states.size()):
+                        doc_scores_softmax = torch.unsqueeze(doc_scores_softmax, dim=-1)
+
+                    #logger.info(f"Marginalised: {doc_scores_softmax.size()}, {decoder_hidden_states.size()}, {label_mask.size()}")
+                    #label_mask = label_mask.view(int(label_mask.size()[0] / decoder_hidden_states.size()[0] / actual_n_docs))
+                    marginalised = doc_scores_softmax * decoder_hidden_states[torch.unsqueeze(label_mask, dim=1).repeat(1,actual_n_docs,1)] * actual_n_docs
+
+                    x = torch.mean(torch.mean((marginalised), dim=-2), dim=-2)
+                    #y = torch.max(torch.max((marginalised), dim=-2).values, dim=-2).values
+                    gen_dec_emb = x # torch.cat((x, y), dim=-1)
+
+                    results["generator_dec_embeddings"] = gen_dec_emb
+                    #logger.info(f"generator_dec_embeddings size: {results['generator_dec_embeddings'].size()}")
+
+                
                 if model_output.perplexity is not None:
                     results["perplexity"] = model_output.perplexity
                     results["avg_log_likelihood"] = model_output.avg_log_likelihood
@@ -259,6 +302,7 @@ class RagFragmentsModel(Model):
 
     def make_output_human_readable(self, output_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         if "generated_sequences" in output_dict:
+            print(output_dict["generated_sequences"])
             output_dict["generated_sequences"] = self.tokenizer.decode(output_dict["generated_sequences"],
                                                                        skip_special_tokens=True)
         return output_dict
@@ -267,9 +311,9 @@ class RagFragmentsModel(Model):
         if not self.training:
             with torch.no_grad():
 
-                self.metrics['lm_perplexity'] = model_output.perplexity
+                self.metrics['lm_perplexity'](model_output.perplexity)
 
-                num_docs = self.rag_ndocs
+                num_docs = max(self.rag_ndocs, 1)
                 labels_batch_size = label_tokens.size()[0]
                 indices = range(0, labels_batch_size * num_docs, num_docs)
 
@@ -277,11 +321,12 @@ class RagFragmentsModel(Model):
                 for acc in self.lm_accuracy_top_k:
                     self.metrics[f'lm_accuracy_{acc}'](logits_indexed, label_tokens, mask=label_mask)
 
-    def _add_retrieval_info(self, model_outputs, label_tokens, results):
+    def _add_retrieval_info(self, model_outputs, label_tokens, results, batch_size):
         if not self.training:
             with torch.no_grad():
 
-                num_docs = self.rag_ndocs
+                num_docs = max(self.rag_ndocs, 1)
+
                 labels_batch_size = label_tokens.size()[0]
                 indices = range(0, labels_batch_size * num_docs, num_docs)
 
@@ -293,31 +338,36 @@ class RagFragmentsModel(Model):
                                                                         skip_special_tokens=True,
                                                                         clean_up_tokenization_spaces=True)
 
-                docs_list = []
+                batch_docs_list = []
 
-                batch_dl_scores = model_outputs.doc_scores.tolist()
-                batch_doc_ids = model_outputs.retrieved_doc_ids.tolist()
+                if model_outputs.doc_scores is not None and model_outputs.retrieved_doc_ids is not None:
+                    batch_dl_scores = model_outputs.doc_scores.tolist()
+                    batch_doc_ids = model_outputs.retrieved_doc_ids.tolist()
 
-                for doc_ids, dl_scores in zip(batch_doc_ids, batch_dl_scores):
+                    for doc_ids, dl_scores in zip(batch_doc_ids, batch_dl_scores):
 
-                    dp_scores = model_outputs.doc_scores.softmax(dim=-1)[0]
+                        dp_scores = model_outputs.doc_scores.softmax(dim=-1)[0]
 
-                    # print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
-                    doc_dicts = self.retriever.index.get_doc_dicts(model_outputs.retrieved_doc_ids)[0]
+                        # print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
+                        doc_dicts = self.retriever.index.get_doc_dicts(model_outputs.retrieved_doc_ids)[0]
 
-                    for doc_id, dl_score, dp_score, title, text in zip(doc_ids, dl_scores, dp_scores,
-                                                                       doc_dicts["title"],
-                                                                       doc_dicts["text"]):
-                        ret_doc_dict = {}
-                        ret_doc_dict["id"] = doc_id
-                        ret_doc_dict["title"] = title
-                        ret_doc_dict["text"] = text
-                        ret_doc_dict["dot_score"] = dl_score
-                        ret_doc_dict["probability"] = dp_score.item()
+                        doc_list = []
 
-                        docs_list.append(ret_doc_dict)
+                        for doc_id, dl_score, dp_score, title, text in zip(doc_ids, dl_scores, dp_scores,
+                                                                           doc_dicts["title"],
+                                                                           doc_dicts["text"]):
+                            ret_doc_dict = {}
+                            ret_doc_dict["id"] = doc_id
+                            ret_doc_dict["title"] = title
+                            ret_doc_dict["text"] = text
+                            ret_doc_dict["dot_score"] = dl_score
+                            ret_doc_dict["probability"] = dp_score.item()
 
-                    results["retrieved_docs"] = docs_list
+                            doc_list.append(ret_doc_dict)
+
+                        batch_docs_list.append(doc_list)
+
+                    results["retrieved_docs"] = batch_docs_list
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:
         metrics = {metric_name: metric.get_metric(reset) for metric_name, metric in self.metrics.items()}
@@ -348,7 +398,6 @@ class RagFragmentsModel(Model):
                  max_input_length: int = 512
                  ) -> List[Dict[str, Any]]:
 
-        print(f"Text: {text}")
         input_dict = self.retriever_tokenizer.encode_plus(text, max_length=max_input_length)
         print(f"{input_dict}")
         input_ids = input_dict["input_ids"]

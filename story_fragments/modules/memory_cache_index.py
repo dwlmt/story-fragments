@@ -110,7 +110,7 @@ class MemoryIndex:
 
         doc_dict = self.cache.get(int(doc_id))
         if doc_dict is None:
-            doc_dict = {"id": f"{doc_id}", "text": "<MISSING>", "title": "<MISSING>",
+            doc_dict = {"id": f"{doc_id}", "text": " ", "title": " ",
                         "embeddings": np.zeros(self.embedding_dim, dtype=np.float32)}
 
         logging.debug(f"Doc Dicts: {doc_dict['id']}, {doc_dict['title']}, {doc_dict['text']}")
