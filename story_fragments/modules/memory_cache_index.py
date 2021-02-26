@@ -1,3 +1,4 @@
+import copy
 import logging
 from collections import OrderedDict
 from typing import List, Tuple, Any
@@ -68,6 +69,10 @@ class MemoryIndex:
         self.embedding_dim = embedding_dim
         self.id = 0
 
+        ''' This is a hack so that memory has different id range from the knowledgebase.
+        '''
+        self.id_offset = int(1e9 + 1)
+
         self.init_index()
 
         def remove_from_cache(docs: List[Tuple]):
@@ -92,10 +97,22 @@ class MemoryIndex:
         doc_ids = doc_ids.flatten()
         docs = []
         for id in doc_ids:
-            doc_dict = self.cache.get(int(id))
+
+            id = int(id) - self.id_offset
+
+            doc_dict = copy.deepcopy(self.cache.get(int(id)))
             if doc_dict is None:
-                doc_dict = {"id": f"{id}", "text": "<MISSING>", "title": "<MISSING>",
+                doc_dict = {"id": f"{id}", "text": "", "title": "",
                             "embeddings": np.zeros(self.embedding_dim, dtype=np.float32)}
+            else:
+                try:
+                    doc_dict['id'] = f"{int(doc_dict['id']) + self.id_offset}"
+                except TypeError:
+                    pass
+                except ValueError:
+                    pass
+
+
             docs.append(doc_dict)
 
         logging.debug(f"Doc Dicts: {doc_dict['id']}, {doc_dict['title']}, {doc_dict['text']}")
@@ -108,10 +125,19 @@ class MemoryIndex:
             doc_ids (int):
         """
 
-        doc_dict = self.cache.get(int(doc_id))
+        doc_id = int(doc_id) - self.id_offset
+
+        doc_dict = copy.deepcopy(self.cache.get(int(doc_id)))
         if doc_dict is None:
             doc_dict = {"id": f"{doc_id}", "text": " ", "title": " ",
                         "embeddings": np.zeros(self.embedding_dim, dtype=np.float32)}
+        else:
+            try:
+                doc_dict['id'] = f"{int(doc_dict['id']) + self.id_offset}"
+            except TypeError:
+                pass
+            except ValueError:
+                pass
 
         logging.debug(f"Doc Dicts: {doc_dict['id']}, {doc_dict['title']}, {doc_dict['text']}")
 
@@ -146,6 +172,8 @@ class MemoryIndex:
 
         indices_array = np.asarray(indices)
         embeddings_array = np.asarray(embeddings_list)
+
+        indices_array += self.id_offset
 
         logging.debug(f"Top Docs: {indices}, {distances}")
         return indices_array, embeddings_array, distances

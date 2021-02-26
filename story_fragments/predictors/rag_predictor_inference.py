@@ -50,9 +50,9 @@ class RagFragmentsInferencePredictor(Predictor):
         self._keep_embeddings = parse_bool(os.getenv("KEEP_EMBEDDINGS", default="True"))
 
         generator_model_name = str(os.getenv("GENERATOR_MODEL_NAME", default="facebook/bart-base"))
-        generator_max_length = int(os.getenv("GENERATOR_MAX_LENGTH", default=256))
+        generator_max_length = int(os.getenv("GENERATOR_MAX_LENGTH", default=128))
         encoder_model_name = str(os.getenv("ENCODER_MODEL_NAME", default="facebook/dpr-question_encoder-multiset-base"))
-        encoder_max_length = int(os.getenv("ENCODER_MAX_LENGTH", default=256))
+        encoder_max_length = int(os.getenv("ENCODER_MAX_LENGTH", default=512))
         add_special_tokens = parse_bool(os.getenv("ADD_SPECIAL_TOKENS", default="True"))
 
         self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
@@ -78,6 +78,9 @@ class RagFragmentsInferencePredictor(Predictor):
         self._l1_distance = nn.PairwiseDistance(p=1)
 
         self._vader_analyzer = SentimentIntensityAnalyzer()
+
+        # Hacky flag to stop adding duplicates to memory.
+        os.environ['DONT_ADD_TO_MEMORY'] = 'True'
 
     def predict(self, sentences: List[str] = None,  text: str = None, passage: str = None) -> JsonDict:
 
@@ -126,8 +129,7 @@ class RagFragmentsInferencePredictor(Predictor):
             if self._add_to_memory:
                 self._model.add_to_memory(example["text"],  add_to_memory=self._add_to_memory)
 
-        for i, (first, second) in enumerate(more_itertools.windowed(model_outputs_list, n=2, step=1)):
-
+        for i, (first, second) in enumerate(more_itertools.pairwise(model_outputs_list)):
 
             if first == None or second == None:
                 continue

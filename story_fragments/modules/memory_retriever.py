@@ -153,12 +153,9 @@ class RagMemoryRetriever(RagRetriever):
 
         super().__init__(config, question_encoder_tokenizer, generator_tokenizer, index=index)
 
-        if config.use_memory_retrieval:
-            self.memory_index = MemoryIndex(capacity=config.memory_capacity, buffer=config.memory_buffer,
-                                            lru=config.memory_lru)
 
-        else:
-            self.memory_index = None
+        self.memory_index = MemoryIndex(capacity=config.memory_capacity, buffer=config.memory_buffer,
+                                            lru=config.memory_lru)
 
         self.config = config
 
@@ -366,18 +363,20 @@ class RagMemoryRetriever(RagRetriever):
 
         actual_n_docs = n_docs#min(n_docs, len(docs) )
 
+        if actual_n_docs > 0:
 
-        rag_input_strings = [
-            cat_input_and_doc(
-                docs[i]["title"][j],
-                docs[i]["text"][j],
-                input_strings[i],
-                prefix,
-            )
-            for i in range(min(len(docs), len(input_strings)))
-            for j in range(actual_n_docs)
-        ]
-
+            rag_input_strings = [
+                cat_input_and_doc(
+                    docs[i]["title"][j],
+                    docs[i]["text"][j],
+                    input_strings[i],
+                    prefix,
+                )
+                for i in range(min(len(docs), len(input_strings)))
+                for j in range(actual_n_docs)
+            ]
+        else:
+            rag_input_strings = input_strings
 
         contextualized_inputs = self.generator_tokenizer.batch_encode_plus(
             rag_input_strings,
@@ -386,8 +385,7 @@ class RagMemoryRetriever(RagRetriever):
             padding="max_length",
             truncation=True,
         )
-        # logger.info(f"Contextualised inputs: {torch.sum((contextualized_inputs['input_ids'] != 1), dim=-1)}, {contextualized_inputs['input_ids'].size()} ")
-
+      
         return contextualized_inputs["input_ids"], contextualized_inputs["attention_mask"]
 
     def __call__(
@@ -459,9 +457,7 @@ class RagMemoryRetriever(RagRetriever):
             context_dicts (List[dict]): A list of dictionaries with the representations. Must contain id, title and text fields.
             context_hidden_states (ndarray): The ndarray is batch size * dim.
         """
-        if self.memory_index is not None:
-            self.memory_index.add(context_dicts=context_dicts, context_hidden_states=context_hidden_states)
+        self.memory_index.add(context_dicts=context_dicts, context_hidden_states=context_hidden_states)
 
     def clear_memory(self):
-
         self.memory_index.clear_memory()

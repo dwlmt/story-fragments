@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """RAG model implementation."""
+import os
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Optional, Callable, List, Tuple
@@ -148,7 +149,6 @@ class RagMemoryModel(RagModel):
                 and (context_input_ids is None or context_attention_mask is None or doc_scores is None)
                 and encoder_outputs is None
                 and n_docs > 0
-                and (self.use_dataset_retrieval or self.use_memory_retrieval)
         )
         # encoder_outputs are pre-computed during RAG-token generation
         if encoder_outputs is None:
@@ -185,7 +185,8 @@ class RagMemoryModel(RagModel):
                 ).squeeze(1)
 
                 #if self.use_memory_retrieval:
-                self.add_to_memory(input_ids, attention_mask, input_text_metadata)
+                if not 'DONT_ADD_TO_MEMORY' in os.environ or os.environ.get("DONT_ADD_TO_MEMORY") != "True":
+                    self.add_to_memory(input_ids, attention_mask, input_text_metadata)
 
             else:
                 assert (
@@ -353,7 +354,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         if labels is not None:
             assert decoder_input_ids is not None
 
-            actual_n_docs = n_docs #doc_scores.shape[1]
+            actual_n_docs = n_docs
 
             rag_logprobs = self.marginalize(logits, doc_scores, actual_n_docs)
 
@@ -448,8 +449,9 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
                                target.view(target.size()[0] * target.size()[1]))
 
         with torch.no_grad():
-            target = torch.squeeze(target, dim=0)
+            #target = torch.squeeze(target, dim=0)
             label_mask = (target != self.config.pad_token_id)
+            #print(f"Label mask: {label_mask}")
             n_tokens = torch.sum(
                 label_mask.view(label_mask.size()[0] * label_mask.size()[1]))
 
