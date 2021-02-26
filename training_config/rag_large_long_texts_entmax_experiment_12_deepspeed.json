@@ -61,31 +61,29 @@
       }
     }
   },
-  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_12_label_12_step_12/train\",  \"bookcorpus-interleaved\": \"bookcorpus_dummy_12_label_12_step_12/train\", \"gutenberg-interleaved\": \"gutenberg_dummy_12_label_12_step_12/validation\"}",
-  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_12_label_12_step_12/validation\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_12_label_12_step_12/validation\", \"gutenberg-interleaved\": \"gutenberg_dummy_12_label_12_step_12/validation\"}",
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/train\",  \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/train\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/validation\"}",
+  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/validation\", \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/validation\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/validation\"}",
   "data_loader": {
     "batch_size": 8,
-    "batches_per_epoch": 100
+    "batches_per_epoch": 25000
   },
   "validation_data_loader": {
     "batch_size": 8,
-    "batches_per_epoch": 100
+    "batches_per_epoch": 2000
   },
   "model": {
     "type": "rag-fragments",
-    "rag_text_concat_first": true,
     "generator_name": "facebook/bart-large",
     "retriever_name": "facebook/rag-token-nq",
     "index_name": "custom",
     "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_6_step_3_exact",
     "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_6_step_3_exact.faiss",
     "gradient_checkpointing": true,
-    "ndocs": 5,
     "max_combined_length": 512,
-    "use_memory_retrieval": true,
-    "entmax": true
+    "entmax": true,
+    "rag_text_concat_first": true
   },
-  "trainer": {
+   "trainer": {
     "type": "deepspeed",
     "use_amp": false,
     "optimizer": {
@@ -120,8 +118,9 @@
       },
      "fp32_allreduce": false
     },
-    "num_epochs":  1,
+    "num_epochs":  1000,
     "patience": 3,
+    "num_gradient_accumulation_steps": 1,
     "checkpointer": {
       "num_serialized_models_to_keep": 1
     }

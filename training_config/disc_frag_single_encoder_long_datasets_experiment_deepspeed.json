@@ -11,7 +11,8 @@
         "generator_max_length": 128,
         "encoder_max_length": 128,
         "manual_shards": 1,
-        "lazy": true
+        "lazy": true,
+        "add_negative_examples": true
       },
       "schmoop-interleaved": {
         "type": "schmoop-interleaved",
@@ -20,7 +21,8 @@
         "generator_max_length": 128,
         "encoder_max_length": 128,
         "manual_shards": 1,
-        "lazy": true
+        "lazy": true,
+        "add_negative_examples": true
       },
       "bookcorpus-interleaved": {
         "type": "bookcorpus-interleaved",
@@ -29,9 +31,9 @@
         "generator_max_length": 128,
         "encoder_max_length": 128,
         "manual_shards": 1,
-        "lazy": true
+        "lazy": true,
+        "add_negative_examples": true
       },
-
       "gutenberg-interleaved": {
         "type": "gutenberg-interleaved",
         "encoder_model_name": "bert-base-cased",
@@ -39,7 +41,8 @@
         "generator_max_length": 128,
         "encoder_max_length": 128,
         "manual_shards": 1,
-        "lazy": true
+        "lazy": true,
+        "add_negative_examples": true
       }
     }
   },
