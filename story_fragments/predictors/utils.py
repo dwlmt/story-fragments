@@ -5,7 +5,8 @@ from blingfire import text_to_sentences
 
 _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
-def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size: int = 6, sentence_step_size: int = 6, max_passages: int = None):
+def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size: int = 6,
+                      sentence_step_size: int = 6, max_passages: int = None, prefill: bool = False):
 
     labels = []
 
@@ -32,6 +33,11 @@ def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size:
         raise ValueError("Input text or sentences must be provided.")
   
     if sentences is not None:
+
+        # Need to prefill with blank sentences to support a sliding window.
+        if prefill:
+            sentences = [" <PLACEHOLDER> "] * sentence_batch_size + sentences
+
         sentences = list(more_itertools.windowed(sentences, n=sentence_batch_size + sentence_label_size, fillvalue=" ",
                                                 step=sentence_step_size))
 
