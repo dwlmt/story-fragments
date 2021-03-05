@@ -63,6 +63,8 @@ class RagMemoryConfig(RagConfig):
             entmax: bool = False,
             entmax_k: int = 512,
             memory_retrieval_weighting: float = 1.0,
+            train_context_encoder: bool = False,
+            max_doc_context_length: int = 256,
             **kwargs
     ):
         super().__init__(
@@ -109,3 +111,5 @@ class RagMemoryConfig(RagConfig):
         self.entmax = entmax
         self.entmax_k = entmax_k
         self.memory_retrieval_weighting = memory_retrieval_weighting
+        self.train_context_encoder = train_context_encoder
+        self.max_doc_context_length = max_doc_context_length

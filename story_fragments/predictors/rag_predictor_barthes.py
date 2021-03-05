@@ -62,8 +62,8 @@ class RagFragmentsBarthesPredictor(Predictor):
 
         self._calc_vector_metrics = parse_bool(os.getenv("CALC_VECTOR_METRICS", default="True"))
 
-        self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=3))
-        self._peak_prominence = float(os.getenv("PEAK_PROMINENCE", default=0.10))
+        self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=5))
+        self._peak_prominence = float(os.getenv("PEAK_PROMINENCE", default=0.15))
         self._peak_threshold = float(os.getenv("PEAK_THRESHOLD", default=0.01))
         self._peak_height = float(os.getenv("PEAK_HEIGHT", default=0.01))
 
@@ -117,7 +117,27 @@ class RagFragmentsBarthesPredictor(Predictor):
             p["metrics"]["sentiment"] = 0.0
             p["metrics"]["sentiment_abs"] = 0.0
             p["metrics"]["avg_log_likelihood"] = 0.0
-            p["metrics"]["avg_log_likelihood_salience"] = 0.0
+
+            field_list = ["perplexity", "avg_log_likelihood"]
+
+            if self._retrieval_metrics:
+                for k in field_list:
+                    p["metrics"][f"{k}_no_ret"] = 0.0
+                    p["metrics"][f"{k}_no_ret_diff"] = 0.0
+
+            if self._swap_metrics:
+                for k in field_list:
+                    p["metrics"][f"{k}_swapped"] = 0.0
+                    p["metrics"][f"{k}_swapped_diff"] = 0.0
+
+
+            salience_dict = {}
+            for k, v in p["metrics"].items():
+                salience_dict[f"{k}_salience"] = 0.0
+
+            p["metrics"] = {**p["metrics"], **salience_dict}
+
+                
 
             if self._calc_vector_metrics:
                 for field in embeddings_fields:
@@ -126,6 +146,8 @@ class RagFragmentsBarthesPredictor(Predictor):
                     p["metrics"][f"{field}_cosine_sim"] = 0.0
                     p["metrics"][f"{field}_dot_product"] = 0.0
                     p["metrics"][f"{field}_wasserstein_dist"] = 0.0
+
+            print(f"Passage: {p}")
 
         # Calculate the offset passages which wkip
 
@@ -143,7 +165,7 @@ class RagFragmentsBarthesPredictor(Predictor):
         self._model.clear_memory()
 
         # Cleanup the repeating offset and label text.
-        #self.cleanup_output(results)
+        self.cleanup_output(results)
 
         return results
 
@@ -260,7 +282,7 @@ class RagFragmentsBarthesPredictor(Predictor):
         return passages_swapped
 
     def _calc_salience(self, results, passages_offset):
-        salience_field_dict = {"avg_log_likelihood": False}
+        salience_field_dict = {"avg_log_likelihood": False, "perplexity": False}
         for field in embeddings_fields:
             f_dict = {f"{field}_l1_dist": True,
                       f"{field}_l2_dist": True,
@@ -306,7 +328,7 @@ class RagFragmentsBarthesPredictor(Predictor):
         passages = results["passages"]
         for p in passages:
             p["peaks"] = {}
-        peak_field_dict = {"avg_log_likelihood_salience": False,
+        peak_field_dict = {"avg_log_likelihood": False,
                            "perplexity": False,
                            "sentiment": False,
                            "sentiment_abs": False}
@@ -323,6 +345,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                       f"{field}_wasserstein_dist_salience": False
                       }
             peak_field_dict = {**peak_field_dict, **f_dict}
+
         if self._retrieval_metrics:
             no_kb_dict = {}
             for k, v in peak_field_dict.items():
@@ -336,6 +359,11 @@ class RagFragmentsBarthesPredictor(Predictor):
                 swap_dict[f"{k}_swapped"] = v
                 swap_dict[f"{k}_swapped_diff"] = v
             peak_field_dict = {**peak_field_dict, **swap_dict}
+
+        salience_dict = {}
+        for k, v in peak_field_dict.items():
+            salience_dict[f"{k}_salience"] = False
+        peak_field_dict = {**peak_field_dict, **salience_dict}
 
         for k, flip in peak_field_dict.items():
 

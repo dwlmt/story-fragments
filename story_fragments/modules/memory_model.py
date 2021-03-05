@@ -98,22 +98,12 @@ class RagMemoryModel(RagModel):
                          retriever=retriever,
                          **kwargs)
 
-        def freeze_part(model: torch.nn.Module):
-            for par in model.parameters():
-                par.requires_grad = False
-
         self.use_dataset_retrieval = config.use_dataset_retrieval
         self.use_memory_retrieval = config.use_memory_retrieval
         self.combined_n_docs = config.combined_n_docs
 
-        if self.use_memory_retrieval:
-            self.context_encoder = DPRContextEncoder.from_pretrained(config.context_encoder)
-            freeze_part(self.context_encoder)
-
-            self.ctx_tokenizer = DPRContextEncoderTokenizerFast.from_pretrained(config.context_encoder)
-        else:
-            self.context_encoder = None
-            self.ctx_tokenizer = None
+        self.context_encoder = DPRContextEncoder.from_pretrained(config.context_encoder)
+        self.ctx_tokenizer = DPRContextEncoderTokenizerFast.from_pretrained(config.context_encoder)
 
     def forward(
             self,
@@ -167,17 +157,26 @@ class RagMemoryModel(RagModel):
                     n_docs=n_docs,
                     return_tensors="pt",
                 )
-                context_input_ids, context_attention_mask, retrieved_doc_embeds, retrieved_doc_ids = (
+                context_input_ids, context_attention_mask, retrieved_doc_embeds, retrieved_doc_ids,\
+                    doc_input_ids, doc_attention_mask = (
                     retriever_outputs["context_input_ids"],
                     retriever_outputs["context_attention_mask"],
                     retriever_outputs["retrieved_doc_embeds"],
-                    retriever_outputs["doc_ids"]
+                    retriever_outputs["doc_ids"],
+                    retriever_outputs["doc_input_ids"],
+                    retriever_outputs["doc_attention_mask"]
                 )
 
                 # set to correct device
                 retrieved_doc_embeds = retrieved_doc_embeds.to(question_encoder_last_hidden_state)
                 context_input_ids = context_input_ids.to(input_ids)
                 context_attention_mask = context_attention_mask.to(input_ids)
+
+                # If training the context encoder then re-encode as needed for a gradient.
+                if self.config.train_context_encoder and self.training:
+                    doc_input_ids = doc_input_ids.to(input_ids)
+                    doc_attention_mask = doc_attention_mask.to(input_ids)
+                    self.encode_context_embeddings(doc_input_ids, doc_attention_mask)
 
                 # compute doc_scores
                 doc_scores = torch.bmm(
@@ -218,6 +217,7 @@ class RagMemoryModel(RagModel):
             past_key_values=past_key_values,
             use_cache=use_cache,
             return_dict=True,
+            #output_attentions=output_attentions,
             output_hidden_states=True
         )
 
@@ -238,7 +238,7 @@ class RagMemoryModel(RagModel):
             retrieved_doc_embeds = None
             retrieved_doc_ids = None
 
-        return RetrievAugLMMarginOutput(
+        return RetrievAugLMOutput(
             logits=gen_outputs.logits,
             doc_scores=doc_scores,
             past_key_values=gen_outputs.past_key_values,
@@ -254,18 +254,24 @@ class RagMemoryModel(RagModel):
             generator_enc_attentions=gen_outputs.encoder_attentions,
             generator_dec_hidden_states=gen_outputs.decoder_hidden_states,
             generator_dec_attentions=gen_outputs.decoder_attentions,
+            #generator_cross_attentions=gen_outputs.cross_attentions
         )
 
     def add_to_memory(self, input_ids, attention_mask, input_text_metadata):
         with torch.no_grad():
-            ctx_enc_outputs = self.context_encoder(
-                input_ids, attention_mask=attention_mask, return_dict=True
-            )
-            # logger.info(f"Context Encoded {ctx_enc_outputs}")
-            context_embeddings = ctx_enc_outputs.pooler_output.detach().cpu().to(torch.float32).numpy()
-            # logger.info(f"{context_embeddings}")
+
+            context_embeddings = self.encode_context_embeddings(input_ids, attention_mask)
 
             self.retriever.add(context_dicts=input_text_metadata, context_hidden_states=context_embeddings)
+
+    def encode_context_embeddings(self, input_ids, attention_mask):
+        ctx_enc_outputs = self.context_encoder(
+            input_ids, attention_mask=attention_mask, return_dict=True
+        )
+
+        context_embeddings = ctx_enc_outputs.pooler_output.detach().cpu().to(torch.float32).numpy()
+
+        return context_embeddings
 
     def clear_memory(self):
 
@@ -401,6 +407,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             generator_enc_attentions=outputs.generator_enc_attentions,
             generator_dec_hidden_states=outputs.generator_dec_hidden_states,
             generator_dec_attentions=outputs.generator_dec_attentions,
+            #generator_cross_attentions=outputs.generator_cross_attentions,
         )
 
     def get_nll(self, rag_logprobs, doc_scores, target, reduce_loss=False, epsilon=0.0, n_docs=None):

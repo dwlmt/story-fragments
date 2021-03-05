@@ -51,7 +51,8 @@ class RagFragmentsModel(Model):
                  entmax: bool = False,
                  entmax_k: int = 512,
                  unlikelihood_ratio: float = 1.0,
-                 unlikelihood_beta: float = 0.5
+                 unlikelihood_beta: float = 0.5,
+                 train_context_encoder: bool = False,
                  ):
         super().__init__(vocab)
 
@@ -87,6 +88,8 @@ class RagFragmentsModel(Model):
 
         config.unlikelihood_beta = unlikelihood_beta
         config.unlikelihood_ratio = unlikelihood_ratio
+
+        config.train_context_encoder = train_context_encoder
 
 
         self.retriever = RagMemoryRetriever.from_pretrained(retriever_name,
@@ -249,6 +252,9 @@ class RagFragmentsModel(Model):
 
             # print(f"generator_enc_embeddings: {gen_enc_emb.size()}")
 
+            if len(gen_enc_emb.size()) == 1:
+                gen_enc_emb = torch.unsqueeze(gen_enc_emb, dim=0)
+
             results["generator_enc_embeddings"] = gen_enc_emb
             # logger.info(f"generator_enc_embeddings size: {results['generator_enc_embeddings'].size()}")
         decoder_hidden_states = model_output.generator_dec_hidden_states
@@ -282,6 +288,10 @@ class RagFragmentsModel(Model):
                 gen_dec_emb = torch.unsqueeze(gen_dec_emb, dim=0)
 
             # print(f"generator_dec_embeddings: {gen_dec_emb.size()}")
+
+            if len(gen_dec_emb.size()) == 1:
+                gen_dec_emb = torch.unsqueeze(gen_enc_emb, dim=0)
+
             results["generator_dec_embeddings"] = gen_dec_emb
             # logger.info(f"generator_dec_embeddings size: {results['generator_dec_embeddings'].size()}")
         if model_output.perplexity is not None:

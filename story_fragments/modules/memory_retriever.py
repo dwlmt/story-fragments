@@ -21,7 +21,7 @@ from typing import List, Tuple, Optional
 import numpy as np
 from datasets import load_dataset
 from more_itertools import chunked
-from transformers import BatchEncoding
+from transformers import BatchEncoding, DPRContextEncoderTokenizerFast
 from transformers.models.rag.retrieval_rag import RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CustomHFIndex, \
     CanonicalHFIndex, HFIndexBase
 from transformers.utils import logging
@@ -159,6 +159,7 @@ class RagMemoryRetriever(RagRetriever):
 
         self.config = config
 
+        self.ctx_tokenizer = DPRContextEncoderTokenizerFast.from_pretrained(config.context_encoder)
 
     @staticmethod
     def _build_index(config):
@@ -357,15 +358,19 @@ class RagMemoryRetriever(RagRetriever):
                 out = (f"{input_string} {self.config.doc_sep} {prefix} {doc_title} {title_sep} {doc_text} ")
             else:
                 out = (f"{prefix} {doc_title} {title_sep} {doc_text} {self.config.doc_sep} {input_string}")
-            out = _RE_COMBINE_WHITESPACE.sub(" ", out).strip()
 
-            return out
+            doc_out =  (f"{prefix} {doc_title} {title_sep} {doc_text}")
+
+            out = _RE_COMBINE_WHITESPACE.sub(" ", out).strip()
+            doc_out = _RE_COMBINE_WHITESPACE.sub(" ", doc_out).strip()
+
+            return out, doc_out
 
         actual_n_docs = n_docs#min(n_docs, len(docs) )
 
         if actual_n_docs > 0:
 
-            rag_input_strings = [
+            processed_strings = [
                 cat_input_and_doc(
                     docs[i]["title"][j],
                     docs[i]["text"][j],
@@ -375,8 +380,14 @@ class RagMemoryRetriever(RagRetriever):
                 for i in range(min(len(docs), len(input_strings)))
                 for j in range(actual_n_docs)
             ]
+
+            processed_zipped = list(zip(*processed_strings))
+            rag_input_strings = list(processed_zipped[0])
+            document_strings = list(processed_zipped[1])
+
         else:
             rag_input_strings = input_strings
+            document_strings = [" "] * len(input_strings)
 
         contextualized_inputs = self.generator_tokenizer.batch_encode_plus(
             rag_input_strings,
@@ -385,8 +396,16 @@ class RagMemoryRetriever(RagRetriever):
             padding="max_length",
             truncation=True,
         )
+
+        document_inputs = self.ctx_tokenizer.batch_encode_plus(
+            document_strings,
+            max_length=self.config.max_doc_context_length,
+            return_tensors=return_tensors,
+            padding="max_length",
+            truncation=True,
+        )
       
-        return contextualized_inputs["input_ids"], contextualized_inputs["attention_mask"]
+        return contextualized_inputs["input_ids"], contextualized_inputs["attention_mask"], document_inputs["input_ids"], document_inputs["attention_mask"]
 
     def __call__(
             self,
@@ -437,7 +456,8 @@ class RagMemoryRetriever(RagRetriever):
         # print(f"Question input ids: {question_input_ids.size()}")
         input_strings = self.question_encoder_tokenizer.batch_decode(question_input_ids, skip_special_tokens=True)
         # print(f"Input strings: {len(input_strings)}")
-        context_input_ids, context_attention_mask = self.postprocess_docs(
+        context_input_ids, context_attention_mask,\
+            doc_input_ids, doc_attention_mask = self.postprocess_docs(
             docs, input_strings, prefix, n_docs, return_tensors=return_tensors
         )
 
@@ -446,7 +466,9 @@ class RagMemoryRetriever(RagRetriever):
                 "context_input_ids": context_input_ids,
                 "context_attention_mask": context_attention_mask,
                 "retrieved_doc_embeds": retrieved_doc_embeds,
-                "doc_ids": doc_ids
+                "doc_ids": doc_ids,
+                "doc_input_ids": doc_input_ids,
+                "doc_attention_mask": doc_attention_mask,
             },
             tensor_type=return_tensors,
         )
