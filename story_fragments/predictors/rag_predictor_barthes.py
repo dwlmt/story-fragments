@@ -43,6 +43,12 @@ class RagFragmentsBarthesPredictor(Predictor):
     ) -> None:
         super().__init__(model, dataset_reader)
 
+        self._abridge = parse_bool(os.getenv("ABRIDGE", default="False"))
+        self._abridge_cycles = int(os.getenv("ABRIDGE_CYCLES", default=5))
+        self._abridge_percent = int(os.getenv("ABRIDGE_PERCENT", default=10))
+        self._abridge_metric = str(os.getenv("ABRIDGE_METRIC", default="avg_log_likelihood_salience"))
+        self._abridge_flip = parse_bool(os.getenv("ABRIDGE_FLIP", default="False"))
+
         self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
         self._sentence_label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=6))
         self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
@@ -63,7 +69,7 @@ class RagFragmentsBarthesPredictor(Predictor):
         self._calc_vector_metrics = parse_bool(os.getenv("CALC_VECTOR_METRICS", default="True"))
 
         self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=5))
-        self._peak_prominence = float(os.getenv("PEAK_PROMINENCE", default=0.15))
+        self._peak_prominence = float(os.getenv("PEAK_PROMINENCE", default=0.10))
         self._peak_threshold = float(os.getenv("PEAK_THRESHOLD", default=0.01))
         self._peak_height = float(os.getenv("PEAK_HEIGHT", default=0.01))
 
@@ -105,69 +111,94 @@ class RagFragmentsBarthesPredictor(Predictor):
         # results["inputs"] = inputs
         results["passages"] = []
 
-        passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
-                                     sentence_label_size=self._sentence_label_size,
-                                     sentence_step_size=self._sentence_step_size, max_passages=self._max_passages,
-                                     prefill=True if self._sentence_step_size < self._sentence_batch_size else False)
+        cycles = self._abridge_cycles if self._abridge else 1
+        for i in range(cycles):
 
-        # Set all the metrics to 0.
-        for p in passages:
-            p["metrics"] = {}
-            p["metrics"]["perplexity"] = 0.0
-            p["metrics"]["sentiment"] = 0.0
-            p["metrics"]["sentiment_abs"] = 0.0
-            p["metrics"]["avg_log_likelihood"] = 0.0
+            passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
+                                         sentence_label_size=self._sentence_label_size,
+                                         sentence_step_size=self._sentence_step_size, max_passages=self._max_passages,
+                                         prefill=True if self._sentence_step_size < self._sentence_batch_size else False)
 
-            field_list = ["perplexity", "avg_log_likelihood"]
+            if self._abridge and i == 0:
+                results["orig_passages"] = copy.deepcopy(passages)
 
-            if self._retrieval_metrics:
-                for k in field_list:
-                    p["metrics"][f"{k}_no_ret"] = 0.0
-                    p["metrics"][f"{k}_no_ret_diff"] = 0.0
+            # Set all the metrics to 0.
+            for p in passages:
+                p["metrics"] = {}
+                p["metrics"]["perplexity"] = 0.0
+                p["metrics"]["sentiment"] = 0.0
+                p["metrics"]["sentiment_abs"] = 0.0
+                p["metrics"]["avg_log_likelihood"] = 0.0
 
-            if self._swap_metrics:
-                for k in field_list:
-                    p["metrics"][f"{k}_swapped"] = 0.0
-                    p["metrics"][f"{k}_swapped_diff"] = 0.0
+                field_list = ["perplexity", "avg_log_likelihood"]
+
+                if self._retrieval_metrics:
+                    for k in field_list:
+                        p["metrics"][f"{k}_no_ret"] = 0.0
+                        p["metrics"][f"{k}_no_ret_diff"] = 0.0
+
+                if self._swap_metrics:
+                    for k in field_list:
+                        p["metrics"][f"{k}_swapped"] = 0.0
+                        p["metrics"][f"{k}_swapped_diff"] = 0.0
 
 
-            salience_dict = {}
-            for k, v in p["metrics"].items():
-                salience_dict[f"{k}_salience"] = 0.0
+                salience_dict = {}
+                for k, v in p["metrics"].items():
+                    salience_dict[f"{k}_salience"] = 0.0
 
-            p["metrics"] = {**p["metrics"], **salience_dict}
+                p["metrics"] = {**p["metrics"], **salience_dict}
 
-                
 
-            if self._calc_vector_metrics:
-                for field in embeddings_fields:
-                    p["metrics"][f"{field}_l1_dist"] = 0.0
-                    p["metrics"][f"{field}_l2_dist"] = 0.0
-                    p["metrics"][f"{field}_cosine_sim"] = 0.0
-                    p["metrics"][f"{field}_dot_product"] = 0.0
-                    p["metrics"][f"{field}_wasserstein_dist"] = 0.0
 
-            print(f"Passage: {p}")
+                if self._calc_vector_metrics:
+                    for field in embeddings_fields:
+                        p["metrics"][f"{field}_l1_dist"] = 0.0
+                        p["metrics"][f"{field}_l2_dist"] = 0.0
+                        p["metrics"][f"{field}_cosine_sim"] = 0.0
+                        p["metrics"][f"{field}_dot_product"] = 0.0
+                        p["metrics"][f"{field}_wasserstein_dist"] = 0.0
 
-        # Calculate the offset passages which wkip
+                print(f"Passage: {p}")
 
-        results["passages"] = []
+            # Calculate the offset passages which wkip
 
-        passages_offset = self.passage_offsets(passages)
-        passages_swapped = self.passage_swapped(passages)
+            results["passages"] = []
 
-        self._calc_metrics(passages, passages_offset, passages_swapped, results)
+            passages_offset = self.passage_offsets(passages)
+            passages_swapped = self.passage_swapped(passages)
 
-        self._calc_salience(results, passages_offset)
+            self._calc_metrics(passages, passages_offset, passages_swapped, results)
 
-        self._calc_peaks(results)
+            self._calc_salience(results, passages_offset)
 
-        self._model.clear_memory()
+            self._calc_peaks(results)
 
-        # Cleanup the repeating offset and label text.
-        self.cleanup_output(results)
+            self._model.clear_memory()
+
+            self.cleanup_output(results)
+
+            inputs = self.abridge_if_required(inputs, results)
 
         return results
+
+    def abridge_if_required(self, inputs, results):
+        if self._abridge:
+
+            passages_len = len(results["passages"])
+
+            number_to_keep = int((float(self._abridge_percent) / 100.0) * passages_len)
+            if not self._abridge_flip:
+                retained_passages = [p for p in results["passages"] if
+                                     p["peaks"][f"{self._abridge_metric}_rank"] < (passages_len - number_to_keep)]
+
+            else:
+                retained_passages = [p for p in results["passages"] if
+                                     p["peaks"][f"{self._abridge_metric}_rank"] >= (passages_len - number_to_keep)]
+
+            inputs = {"text": " ".join([p["text"] for p in retained_passages])}
+            print(f"ABRIDGED TEXT: {inputs}")
+        return inputs
 
     def _calc_metrics(self, passages, passages_offset, passages_swapped, results):
         passages_output = []
