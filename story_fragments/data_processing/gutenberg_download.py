@@ -1,21 +1,22 @@
-from pathlib import Path
-
-import fire
-from gutenberg.query import get_etexts
-from gutenberg.query import get_metadata
-from gutenberg.acquire import load_etext
-from gutenberg.cleanup import strip_headers
-
-from gutenberg.acquire import set_metadata_cache
-from gutenberg.acquire import get_metadata_cache
 
 class DownloadGutenberg(object):
 
     def download(self,
-               export_dir="/home/s1569885/gutenberg/",
+                export_dir="/home/s1569885/gutenberg/",
                 subjects_to_include = ["fiction", "classics", "literature", "romance", "crime", "myth",
                                        "legend", "stories", "story", "drama"]
                ):
+
+        from pathlib import Path
+
+        import fire
+        from gutenberg.query import get_etexts
+        from gutenberg.query import get_metadata
+        from gutenberg.acquire import load_etext
+        from gutenberg.cleanup import strip_headers
+
+        from gutenberg.acquire import set_metadata_cache
+        from gutenberg.acquire import get_metadata_cache
 
         cache = get_metadata_cache()
         # cache.populate()

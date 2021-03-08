@@ -6,7 +6,6 @@ import re
 from random import Random
 
 import fire
-from datasets import load_dataset, logger
 from jsonlines import jsonlines
 
 _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
