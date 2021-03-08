@@ -5,6 +5,8 @@ from allennlp.common.checks import ConfigurationError
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import MetadataField
 from allennlp.data.instance import Instance
+from allennlp.data.token_indexers import PretrainedTransformerIndexer
+from overrides import overrides
 
 
 @DatasetReader.register("interleaving-batch")
@@ -36,9 +38,14 @@ class InterleavingBatchDatasetReader(DatasetReader):
             readers: Dict[str, DatasetReader],
             dataset_field_name: str = "dataset",
             batch_size: int = 16,
+            lazy: bool = True,
+            generator_model_name="facebook/bart-base",
+            generator_max_length: int = 128,
+            encoder_model_name="facebook/dpr-question_encoder-multiset-base",
+            encoder_max_length: int = 396,
             **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(manual_distributed_sharding=True, manual_multiprocess_sharding=True, **kwargs)
         self._readers = readers
         self._dataset_field_name = dataset_field_name
 
