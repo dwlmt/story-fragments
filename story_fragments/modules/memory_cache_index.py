@@ -127,6 +127,11 @@ class MemoryIndex:
 
         doc_id = int(doc_id) - self.id_offset
 
+
+        if doc_id < 0:
+            cache_size = len(self.cache)
+            doc_id
+
         doc_dict = copy.deepcopy(self.cache.get(int(doc_id)))
         if doc_dict is None:
             doc_dict = {"id": f"{doc_id}", "text": " ", "title": " ",
@@ -143,7 +148,7 @@ class MemoryIndex:
 
         return doc_dict
 
-    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: (int) = 5) -> Tuple[np.ndarray, np.ndarray]:
+    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: int = 5) -> Tuple[np.ndarray, np.ndarray]:
         """
         Args:
             question_hidden_states (ndarray): Question states to match against the Faiss index.
@@ -155,7 +160,11 @@ class MemoryIndex:
         """
         assert len(question_hidden_states.shape) == 2
 
-        distances, indices, = self.index.search(np.float32(question_hidden_states), n_docs)
+        if n_docs >= 0:
+            distances, indices, = self.index.search(np.float32(question_hidden_states), n_docs)
+        else:
+            distances, indices, = self.random(np.float32(question_hidden_states), n_docs)
+
 
         embeddings_list = []
         for ind in indices:

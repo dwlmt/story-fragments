@@ -16,6 +16,7 @@
 
 import re
 import time
+from random import random, randint
 from typing import List, Tuple, Optional
 
 import numpy as np
@@ -51,7 +52,7 @@ class CustomMemoryHFIndex(CustomHFIndex):
     def get_doc_dicts(self, doc_ids: np.ndarray) -> List[dict]:
         return [self.dataset[doc_ids[i].tolist()] for i in range(doc_ids.shape[0])]
 
-    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs=5) -> Tuple[np.ndarray, np.ndarray]:
+    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: int = 5) -> Tuple[np.ndarray, np.ndarray]:
         distances, ids = self.dataset.search_batch("embeddings", question_hidden_states, n_docs)
         docs = [self.dataset[[i for i in indices if i >= 0]] for indices in ids]
         vectors = [doc["embeddings"] for doc in docs]
@@ -61,8 +62,12 @@ class CustomMemoryHFIndex(CustomHFIndex):
         return np.array(ids), np.array(vectors), distances  # shapes (batch_size, n_docs) and (batch_size, n_docs, d)
 
     def get_doc_dict(self, doc_id: int):
-
-        return self.dataset[doc_id]
+        if doc_id >= 0:
+            return self.dataset[doc_id]
+        else:
+            dataset_size = len(self.dataset)
+            rand_idx = randint(0, dataset_size)
+            return self.dataset[rand_idx]
 
 
 class CanonicalMemoryHFIndex(HFIndexBase):
@@ -123,8 +128,12 @@ class CanonicalMemoryHFIndex(HFIndexBase):
         return np.array(ids), np.array(vectors), distances  # shapes (batch_size, n_docs) and (batch_size, n_docs, d)
 
     def get_doc_dict(self, doc_id: int):
-
-        return self.dataset[doc_id]
+        if doc_id >= 0:
+            return self.dataset[doc_id]
+        else:
+            dataset_size = len(self.dataset)
+            rand_idx = randint(0,dataset_size)
+            return self.dataset[rand_idx]
 
 
 class RagMemoryRetriever(RagRetriever):
@@ -192,10 +201,12 @@ class RagMemoryRetriever(RagRetriever):
         distances_batched = []
         source_batched = []
 
-        if self.config.n_docs > 0:
+        if self.config.n_docs != 0:
             for question_hidden_states in self._chunk_tensor(question_hidden_states, self.batch_size):
 
-                ids, vectors, distances = self.index.get_top_docs(question_hidden_states, self.config.n_docs)
+                config_n_docs = self.config.n_docs
+
+                ids, vectors, distances = self.index.get_top_docs(question_hidden_states, config_n_docs)
 
                 if ids.shape[1] == 0:
                     continue
@@ -205,11 +216,13 @@ class RagMemoryRetriever(RagRetriever):
                 source_batched.append(np.ones(ids.shape, dtype=np.int))
                 distances_batched.append(distances)
 
-        if self.config.memory_n_docs > 0:
+        if self.config.memory_n_docs != 0:
             for question_hidden_states in self._chunk_tensor(question_hidden_states, self.batch_size):
 
+                memory_n_docs = self.config.memory_n_docs
+
                 memory_ids, memory_vectors, memory_distances = self.memory_index.get_top_docs(question_hidden_states,
-                                                                                              self.config.memory_n_docs)
+                                                                                              memory_n_docs)
 
                 if memory_ids.shape[1] == 0:
                     continue
@@ -223,6 +236,8 @@ class RagMemoryRetriever(RagRetriever):
                 source_batched.append(np.zeros(memory_ids.shape, dtype=np.int))
                 distances_batched.append(memory_distances)
 
+        n_docs = abs(n_docs)
+
         if len(ids_batched) == 1:
             ids_arr = np.array(ids_batched[0])
             vectors_arr = np.array(vectors_batched[0])
@@ -235,7 +250,7 @@ class RagMemoryRetriever(RagRetriever):
             distances_arr = np.concatenate([np.array(a) for a in distances_batched], axis=1)
             sources_arr = np.concatenate([np.array(a) for a in source_batched], axis=1)
 
-        if ids_arr.shape[1] > self.config.combined_n_docs:
+        if ids_arr.shape[1] > n_docs:
             sorted_indices = np.argsort(-(distances_arr), axis=1)
 
             ids_arr = np.take_along_axis(ids_arr, sorted_indices, axis=1)
@@ -278,6 +293,9 @@ class RagMemoryRetriever(RagRetriever):
             - **doc_dicts** (:obj:`List[dict]`): The :obj:`retrieved_doc_embeds` examples per query.
         """
         doc_ids, retrieved_doc_embeds, distances, sources = self._main_retrieve(question_hidden_states, n_docs)
+
+        if n_docs < 0:
+            doc_ids = [-d for d in n_docs]
 
         doc_dicts = []
         # print(f"Doc ids: {doc_ids}")

@@ -45,13 +45,13 @@ class RagFragmentsBarthesPredictor(Predictor):
 
         self._abridge = parse_bool(os.getenv("ABRIDGE", default="False"))
         self._abridge_cycles = int(os.getenv("ABRIDGE_CYCLES", default=5))
-        self._abridge_percent = int(os.getenv("ABRIDGE_PERCENT", default=10))
+        self._abridge_percent = int(os.getenv("ABRIDGE_PERCENT", default=25))
         self._abridge_metric = str(os.getenv("ABRIDGE_METRIC", default="avg_log_likelihood_salience"))
         self._abridge_flip = parse_bool(os.getenv("ABRIDGE_FLIP", default="False"))
 
-        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
-        self._sentence_label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=6))
-        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
+        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=12))
+        self._sentence_label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=12))
+        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
         self._max_passages = int(os.getenv("MAX_PASSAGES", default=1000000))
 
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
@@ -64,6 +64,7 @@ class RagFragmentsBarthesPredictor(Predictor):
         add_special_tokens = parse_bool(os.getenv("ADD_SPECIAL_TOKENS", default="True"))
 
         self._retrieval_metrics = parse_bool(os.getenv("RETREIEVAL_METRICS", default="True"))
+        self._random_retrieval_metrics = parse_bool(os.getenv("RANDOM_RETRIEVAL_METRICS", default="False"))
         self._swap_metrics = parse_bool(os.getenv("SWAP_METRICS", default="True"))
 
         self._calc_vector_metrics = parse_bool(os.getenv("CALC_VECTOR_METRICS", default="True"))
@@ -120,7 +121,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                                          prefill=True if self._sentence_step_size < self._sentence_batch_size else False)
 
             if self._abridge and i == 0:
-                results["orig_passages"] = copy.deepcopy(passages)
+               pass#results["orig_passages"] = copy.deepcopy(passages)
 
             # Set all the metrics to 0.
             for p in passages:
@@ -196,7 +197,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                 retained_passages = [p for p in results["passages"] if
                                      p["peaks"][f"{self._abridge_metric}_rank"] >= (passages_len - number_to_keep)]
 
-            inputs = {"text": " ".join([p["text"] for p in retained_passages])}
+            inputs = {"text": " ".join([p["text"] for p in retained_passages]).replace("<PLACEHOLDER>","")}
             print(f"ABRIDGED TEXT: {inputs}")
         return inputs
 
@@ -217,11 +218,14 @@ class RagFragmentsBarthesPredictor(Predictor):
 
                 if self._retrieval_metrics:
                     p_copy = copy.deepcopy(p)
-                    p_copy["ndocs"] = 0
+                    if not self._random_retrieval_metrics:
+                        p_copy["ndocs"] = 0
+                    else:
+                        p_copy["ndocs"] = -p_copy["ndocs"]
+
                     no_kb_results = self._model_output(p_copy)
                     if no_kb_results is not None:
                         no_kb_output.append(no_kb_results)
-
 
                 if self._swap_metrics:
                     p_swapped_results = self._model_output(passages_swapped[i-1])
@@ -240,7 +244,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                         no_kb_offset_output.append(no_kb_results)
 
             # If a sliding window is used then only add the complete passage to memory.
-            if i % add_every == 0 or add_every == 1:
+            if (i % add_every == 0 or add_every == 1) and self._add_to_memory:
                 self._model.add_to_memory(p["text"], add_to_memory=self._add_to_memory)
 
         # Map passage output into metrics.

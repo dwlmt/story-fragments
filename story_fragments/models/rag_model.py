@@ -45,7 +45,7 @@ class RagFragmentsModel(Model):
                  memory_n_docs: int = 5,
                  memory_capacity: int = 127000,
                  memory_buffer=1000,
-                 memory_lru: bool = True,
+                 memory_lru: bool = False,
                  combined_n_docs: int = 5,
                  rag_text_concat_first: bool = False,
                  entmax: bool = False,
