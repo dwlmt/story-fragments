@@ -1,4 +1,5 @@
 import collections
+import textwrap
 from pathlib import Path
 from typing import List
 
@@ -44,7 +45,8 @@ class PlotStories(object):
     def plot(self,
              src_json: List[str],
              output_dir: str,
-             plot_fields: List[str] = ["perplexity","avg_log_likelihood","sentiment"]
+             plot_fields: List[str] = ["perplexity","avg_log_likelihood","sentiment"],
+             full_text_fields = ["avg_log_likelihood_salience"],
              ):
         #print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
 
@@ -60,7 +62,12 @@ class PlotStories(object):
             with jsonlines.open(json_file) as reader:
                 for obj in reader:
 
-                    Path(f"{output_dir}/{i}").mkdir(parents=True, exist_ok=True)
+                    if "title" in obj:
+                        title = obj["title"]
+                    else:
+                        title = f"{i}"
+
+                    Path(f"{output_dir}/{title}").mkdir(parents=True, exist_ok=True)
 
                     if "passages" in obj:
 
@@ -72,11 +79,8 @@ class PlotStories(object):
 
                         passages_df["hover_text"] = passages_df["seq_num"].astype(str) #+ ": " + passages_df["text"]
 
-                        print(f"{passages_df}")
-                        print(f"{passages_df.columns}")
-
                         fig = text_table(passages_df)
-                        plotly.io.write_html(fig=fig, file=f"{output_dir}/{i}/text.html", include_plotlyjs='cdn', include_mathjax='cdn', auto_open=False)
+                        plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/text.html", include_plotlyjs='cdn', include_mathjax='cdn', auto_open=False)
 
                         #print(f"{passages_df.seq_num}, {passages_df.text}")
 
@@ -111,6 +115,18 @@ class PlotStories(object):
                                 x = passages_df["seq_num"]
                                 y = passages_df[f"metrics.{subfield}"] #numpy.squeeze(normalize(numpy.array(passages_df[f"metrics.{field}"]).reshape(1, -1)))
 
+
+                                if subfield in full_text_fields:
+
+                                    text_values = ["<br>".join(textwrap.wrap(t)) for t in passages_df['text'].tolist()]
+
+                                    hover_text = [f"<b>{id}</b> <br><br>{t}" for id, t in
+                                                 zip(passages_df['seq_num'], text_values)]
+
+                                else:
+                                    hover_text = passages_df["hover_text"]
+
+
                                 #print(f"XXX: {x}, YYY: {y}")
                                 fig.add_trace(go.Scatter(x=x,
                                                          y=y,
@@ -118,7 +134,7 @@ class PlotStories(object):
                                                          line=dict(color=colors[(j - 1) % len(colors)]),
                                                          name=f'{subfield}',
                                                          line_shape='spline',
-                                                         hovertext=passages_df["hover_text"]),
+                                                         hovertext=hover_text),
                                                          col=1,row=row)
                                 single_fig.add_trace(go.Scatter(x=x,
                                                          y=y,
@@ -126,7 +142,7 @@ class PlotStories(object):
                                                          line=dict(color=colors[(j - 1) % len(colors)]),
                                                          name=f'{subfield}',
                                                          line_shape='spline',
-                                                         hovertext=passages_df["hover_text"]))
+                                                         hovertext=hover_text))
 
 
                                 if f"peaks.{subfield}_peak" in passages_df.columns:
@@ -176,7 +192,7 @@ class PlotStories(object):
 
                                 single_fig.update_layout(template="plotly_white")
 
-                                plotly.io.write_html(fig=single_fig, file=f"{output_dir}/{i}/{subfield}.html",
+                                plotly.io.write_html(fig=single_fig, file=f"{output_dir}/{title}/{subfield}.html",
                                                      include_plotlyjs='cdn',
                                                      include_mathjax='cdn', auto_open=False)
 
@@ -192,7 +208,7 @@ class PlotStories(object):
 
                             fig.update_layout(template="plotly_white")
 
-                            plotly.io.write_html(fig=fig, file=f"{output_dir}/{i}/{field}_all.html", include_plotlyjs='cdn',
+                            plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/{field}_all.html", include_plotlyjs='cdn',
                                                  include_mathjax='cdn', auto_open=False)
 
                     i += 1
