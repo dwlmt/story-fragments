@@ -39,13 +39,9 @@ class InterleavingBatchDatasetReader(DatasetReader):
             dataset_field_name: str = "dataset",
             batch_size: int = 16,
             lazy: bool = True,
-            generator_model_name="facebook/bart-base",
-            generator_max_length: int = 128,
-            encoder_model_name="facebook/dpr-question_encoder-multiset-base",
-            encoder_max_length: int = 396,
             **kwargs,
     ) -> None:
-        super().__init__(manual_distributed_sharding=True, manual_multiprocess_sharding=True, **kwargs)
+        super().__init__(lazy=lazy, **kwargs)
         self._readers = readers
         self._dataset_field_name = dataset_field_name
 
