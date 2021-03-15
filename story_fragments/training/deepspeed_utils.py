@@ -85,6 +85,9 @@ class DeepspeedConfig(FromParams):
     ):
         path = self._to_temp_file(serialization_dir, train_batch_size=batch_size,
                                   gradient_accumulation_steps=gradient_accumulation_steps)
+
+        os.environ["LOCAL_RANK"] = f"{local_rank}"
+
         ds = deepspeed.initialize(
             args=self.build_deepspeed_args(path, local_rank),
             model=model,
