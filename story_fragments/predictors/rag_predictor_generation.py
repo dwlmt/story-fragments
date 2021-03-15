@@ -63,7 +63,9 @@ class RagFragmentsGenerationPredictor(Predictor):
     def predict_json(self, inputs: JsonDict) -> JsonDict:
         results = {}
 
-        results["inputs"] = inputs
+        if "title" in inputs:
+            results["title"] = inputs
+        #results["inputs"] = inputs
         results["passages"] = []
 
         passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,

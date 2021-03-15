@@ -59,7 +59,10 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
     def predict_json(self, inputs: JsonDict) -> JsonDict:
         results = {}
 
-        results["inputs"] = inputs
+        if "title" in inputs:
+            results["title"] = inputs
+
+        #results["inputs"] = inputs
         results["passages"] = []
 
         passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
@@ -101,7 +104,6 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
             results["passages"].append(batch)
 
             if (i % add_every == 0 or add_every == 1) and self._add_to_memory:
-                self._model.add_to_memory(sentences_joined, add_to_memory=self._add_to_memory)
                 print(f"Add to memory: {sentences_joined}")
                 self._model.add_to_memory(sentences_joined,  add_to_memory=self._add_to_memory)
 

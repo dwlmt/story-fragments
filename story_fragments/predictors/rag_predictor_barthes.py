@@ -31,7 +31,6 @@ def parse_bool(b):
 
 embeddings_fields = ["retrieved_doc_embedding", "generator_enc_embedding", "generator_dec_embedding"]
 
-
 @Predictor.register("rag-fragments-barthes")
 class RagFragmentsBarthesPredictor(Predictor):
     """ Runs predictions used the barthes cardinal function method.
@@ -109,7 +108,9 @@ class RagFragmentsBarthesPredictor(Predictor):
     def predict_json(self, inputs: JsonDict) -> JsonDict:
         results = {}
 
-        # results["inputs"] = inputs
+        if "title" in inputs:
+            results["title"] = inputs
+
         results["passages"] = []
 
         cycles = self._abridge_cycles if self._abridge else 1
@@ -218,10 +219,11 @@ class RagFragmentsBarthesPredictor(Predictor):
 
                 if self._retrieval_metrics:
                     p_copy = copy.deepcopy(p)
+
                     if not self._random_retrieval_metrics:
                         p_copy["ndocs"] = 0
                     else:
-                        p_copy["ndocs"] = -p_copy["ndocs"]
+                        p_copy["ndocs"] = -self._model.config.combined_n_docs
 
                     no_kb_results = self._model_output(p_copy)
                     if no_kb_results is not None:
@@ -238,7 +240,12 @@ class RagFragmentsBarthesPredictor(Predictor):
 
                 if self._retrieval_metrics:
                     p_copy = copy.deepcopy(p_off)
-                    p_copy["ndocs"] = 0
+
+                    if not self._random_retrieval_metrics:
+                        p_copy["ndocs"] = 0
+                    else:
+                        p_copy["ndocs"] = -self._model.config.combined_n_docs
+
                     no_kb_results = self._model_output(p_copy)
                     if no_kb_results is not None:
                         no_kb_offset_output.append(no_kb_results)
@@ -562,10 +569,10 @@ class RagFragmentsBarthesPredictor(Predictor):
             if "retrieved_doc_embeddings" in output:
                 example["retrieved_doc_embedding"] = output["retrieved_doc_embeddings"].tolist()
 
-            if "generator_enc_embedding" in output:
+            if "generator_enc_embeddings" in output:
                 example["generator_enc_embedding"] = output["generator_enc_embeddings"].tolist()
 
-            if "generator_dec_embedding" in output:
+            if "generator_dec_embeddings" in output:
                 example["generator_dec_embedding"] = output["generator_dec_embeddings"].tolist()
 
         if self._add_retrieved_docs and "retrieved_docs" in output:
