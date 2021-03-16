@@ -157,6 +157,9 @@ class RagMemoryModel(RagModel):
                     n_docs=n_docs,
                     return_tensors="pt",
                 )
+
+                n_docs = abs(n_docs)
+
                 context_input_ids, context_attention_mask, retrieved_doc_embeds, retrieved_doc_ids,\
                     doc_input_ids, doc_attention_mask = (
                     retriever_outputs["context_input_ids"],
@@ -262,7 +265,8 @@ class RagMemoryModel(RagModel):
 
             context_embeddings = self.encode_context_embeddings(input_ids, attention_mask)
 
-            self.retriever.add(context_dicts=input_text_metadata, context_hidden_states=context_embeddings)
+            ids = self.retriever.add(context_dicts=input_text_metadata, context_hidden_states=context_embeddings)
+            return ids, context_embeddings
 
     def encode_context_embeddings(self, input_ids, attention_mask):
         ctx_enc_outputs = self.context_encoder(
@@ -351,6 +355,8 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
             input_text_metadata=input_text_metadata
         )
 
+        n_docs = abs(n_docs)
+
         loss = None
         perplexity = None
         avg_ll = None
@@ -360,6 +366,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         if labels is not None:
             assert decoder_input_ids is not None
 
+            n_docs = abs(n_docs)
             actual_n_docs = n_docs
 
             rag_logprobs = self.marginalize(logits, doc_scores, actual_n_docs)

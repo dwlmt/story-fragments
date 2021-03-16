@@ -16,7 +16,7 @@ from story_fragments.modules.memory_retriever import RagMemoryRetriever
 PAD_TOKEN = 1
 
 logger = logging.getLogger(__name__)
-logger.setLevel("DEBUG")
+logger.setLevel("INFO")
 
 
 @Model.register('rag-fragments')
@@ -45,7 +45,7 @@ class RagFragmentsModel(Model):
                  memory_n_docs: int = 5,
                  memory_capacity: int = 127000,
                  memory_buffer=1000,
-                 memory_lru: bool = False,
+                 memory_lru: bool = True,
                  combined_n_docs: int = 5,
                  rag_text_concat_first: bool = False,
                  entmax: bool = False,
@@ -91,6 +91,7 @@ class RagFragmentsModel(Model):
 
         config.train_context_encoder = train_context_encoder
 
+        self.config = config
 
         self.retriever = RagMemoryRetriever.from_pretrained(retriever_name,
                                                             config=config)
@@ -125,7 +126,7 @@ class RagFragmentsModel(Model):
                 dataset: List[str] = None,
                 ) -> Dict[str, torch.Tensor]:
 
-        logger.debug(f"Input: {metadata}")
+        #logger.debug(f"Input: {metadata}")
 
         results = {}
 
@@ -203,11 +204,19 @@ class RagFragmentsModel(Model):
 
         results["input"] = metadata
 
-        logger.debug(f"Results: {results}")
+        #logger.debug(f"Results: {results}")
         return results
 
     def _process_embeddings_and_metrics(self, batch_size, rag_ndocs, input_mask, label_mask, model_output, results):
         actual_n_docs = max(rag_ndocs, 1)
+
+        question_encoder_last_hidden_state = model_output.question_encoder_last_hidden_state
+        if question_encoder_last_hidden_state is not None:
+            if question_encoder_last_hidden_state.size()[0] != batch_size:
+                question_encoder_last_hidden_state = torch.unsqueeze(question_encoder_last_hidden_state, dim=0)
+
+            results["question_embeddings"] = question_encoder_last_hidden_state
+
         generator_enc_last_hidden_state = model_output.generator_enc_last_hidden_state
         if actual_n_docs > 1:
             doc_scores_softmax = torch.unsqueeze(torch.softmax(model_output.doc_scores, dim=-1), dim=2)
@@ -226,6 +235,8 @@ class RagFragmentsModel(Model):
             context_mask = model_output.context_attention_mask.bool()
         else:
             context_mask = input_mask
+
+
         # print(f"generator_enc_last_hidden_state: {generator_enc_last_hidden_state.size()}")
         if generator_enc_last_hidden_state is not None:
 
@@ -257,6 +268,10 @@ class RagFragmentsModel(Model):
 
             results["generator_enc_embeddings"] = gen_enc_emb
             # logger.info(f"generator_enc_embeddings size: {results['generator_enc_embeddings'].size()}")
+
+            #if model_output.question_encoder_last_hidden_state
+
+
         decoder_hidden_states = model_output.generator_dec_hidden_states
         if decoder_hidden_states is not None:
             decoder_hidden_states = decoder_hidden_states[0]
@@ -363,7 +378,7 @@ class RagFragmentsModel(Model):
                         # print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
 
                         doc_dicts = []
-                        print(f"BATCH_DOC_IDS: {batch_doc_ids}")
+                        #print(f"BATCH_DOC_IDS: {batch_doc_ids}")
                         for doc_id in doc_ids:
                             if int(doc_id) < int(1e9):
                                 doc_dict = self.retriever.index.get_doc_dicts(numpy.array([doc_id]))[0]
@@ -500,7 +515,8 @@ class RagFragmentsModel(Model):
 
                 # print(f"Add to memory {input_ids}, {attention_mask}, {input_text_list}")
 
-                self.model.rag.add_to_memory(input_ids, attention_mask, input_text_list)
+                ids, context_embedding = self.model.rag.add_to_memory(input_ids, attention_mask, input_text_list)
+                return ids, context_embedding
 
     def clear_memory(self):
 

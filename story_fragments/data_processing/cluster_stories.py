@@ -25,6 +25,8 @@ import multiprocessing
 from faerun import Faerun
 from PIL import Image
 
+import networkx as nx
+
 
 from story_fragments.data_processing.plotly_utils import text_table, create_peak_text_and_metadata
 
@@ -105,7 +107,7 @@ class ClusterStories(object):
     def cluster(self,
              src_json: List[str],
              output_dir: str,
-             embedding_fields: List[str] = ["retrieved_doc_embedding","generator_enc_embedding","generator_dec_embedding"],
+             embedding_fields: List[str] = ["retrieved_doc_embedding","generator_enc_embedding","generator_dec_embedding","question_embedding","answer_embedding"],
              metrics: List[str] = ["l2","cosine"],
              local_cluster: bool = False
              ):

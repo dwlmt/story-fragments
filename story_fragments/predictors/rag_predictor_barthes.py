@@ -161,8 +161,6 @@ class RagFragmentsBarthesPredictor(Predictor):
                         p["metrics"][f"{field}_dot_product"] = 0.0
                         p["metrics"][f"{field}_wasserstein_dist"] = 0.0
 
-                print(f"Passage: {p}")
-
             # Calculate the offset passages which wkip
 
             results["passages"] = []
@@ -252,7 +250,18 @@ class RagFragmentsBarthesPredictor(Predictor):
 
             # If a sliding window is used then only add the complete passage to memory.
             if (i % add_every == 0 or add_every == 1) and self._add_to_memory:
-                self._model.add_to_memory(p["text"], add_to_memory=self._add_to_memory)
+                ids, context_embeddings = self._model.add_to_memory(p["text"], add_to_memory=self._add_to_memory)
+                #print(ids, context_embeddings)
+                memory_id = numpy.asscalar(ids)
+
+                p["memory_id"] = memory_id
+
+                if self._keep_embeddings:
+
+                    p["answer_embedding"] = context_embeddings.tolist()
+
+
+                print(f"ADD TO MEMORY: {ids}, {context_embeddings.shape}")
 
         # Map passage output into metrics.
         for p, o in zip(passages, passages_output):
@@ -485,33 +494,26 @@ class RagFragmentsBarthesPredictor(Predictor):
             if first == None or second == None:
                 continue
 
-            if "retrieved_doc_embeddings" in first and "retrieved_doc_embeddings" in second:
-                first_doc_emb = torch.tensor(first["retrieved_doc_embeddings"])
-                second_doc_emb = torch.tensor(second["retrieved_doc_embeddings"])
-                metrics = self._vector_distance_metrics("retrieved_doc_embedding", first_doc_emb, second_doc_emb,
-                                                        extension)
 
-                print(f"retrieved_doc_embeddings: {first_doc_emb.size()}, {first_doc_emb.size()}")
-                passages[i]["metrics"] = {**passages[i]["metrics"], **metrics}
+            self._calc_embedding_metrics(extension, first, second, i, passages, "retrieved_doc_embeddings", "retrieved_doc_embedding")
+            self._calc_embedding_metrics(extension, first, second, i, passages, "generator_enc_embeddings",
+                                         "generator_enc_embedding")
+            self._calc_embedding_metrics(extension, first, second, i, passages, "generator_dec_embeddings" ,
+                                         "generator_dec_embedding" )
+            self._calc_embedding_metrics(extension, first, second, i, passages, "question_embeddings",
+                                         "question_embedding")
+            self._calc_embedding_metrics(extension, first, second, i, passages, "answer_embeddings",
+                                         "answer_embedding")
 
-            if "generator_enc_embeddings" in first and "generator_enc_embeddings" in second:
-                first_doc_emb = torch.tensor(first["generator_enc_embeddings"])
-                second_doc_emb = torch.tensor(second["generator_enc_embeddings"])
-                metrics = self._vector_distance_metrics("generator_enc_embedding", first_doc_emb, second_doc_emb,
-                                                        extension)
 
-                print(f"generator_enc_embeddings: {first_doc_emb.size()}, {first_doc_emb.size()}")
-                passages[i]["metrics"] = {**passages[i]["metrics"], **metrics, }
+    def _calc_embedding_metrics(self, extension, first, second, i, passages, output_name, metric_name):
+        if output_name in first and output_name in second:
+            first_doc_emb = torch.tensor(first[output_name])
+            second_doc_emb = torch.tensor(second[output_name])
+            metrics = self._vector_distance_metrics(metric_name, first_doc_emb, second_doc_emb,
+                                                    extension)
 
-            if "generator_dec_embeddings" in first and "generator_dec_embeddings" in second:
-                first_doc_emb = torch.tensor(first["generator_dec_embeddings"])
-                second_doc_emb = torch.tensor(second["generator_dec_embeddings"])
-
-                print(f"generator_dec_embeddings: {first_doc_emb.size()}, {first_doc_emb.size()}")
-
-                metrics = self._vector_distance_metrics("generator_dec_embedding", first_doc_emb, second_doc_emb,
-                                                        extension)
-                passages[i]["metrics"] = {**passages[i]["metrics"], **metrics, }
+            passages[i]["metrics"] = {**passages[i]["metrics"], **metrics}
 
     def _vector_distance_metrics(self, name, x, y, extension=""):
 
@@ -530,7 +532,6 @@ class RagFragmentsBarthesPredictor(Predictor):
         if len(y.size()) < len(x.size()):
             y = torch.unsqueeze(y, dim=0).expand_as(x)
 
-        print(x, y)
 
         # norm = numpy.linalg.norm(x, ord=2)
         # x = x / norm
@@ -555,8 +556,6 @@ class RagFragmentsBarthesPredictor(Predictor):
 
     def _map_output(self, output, example):
 
-        print(f"Passages Output Keys, {output.keys()}")
-
         if "metrics" not in example:
             example["metrics"] = {}
 
@@ -575,9 +574,25 @@ class RagFragmentsBarthesPredictor(Predictor):
             if "generator_dec_embeddings" in output:
                 example["generator_dec_embedding"] = output["generator_dec_embeddings"].tolist()
 
-        if self._add_retrieved_docs and "retrieved_docs" in output:
-            example["retreived_docs"] = output["retrieved_docs"]
+            if "question_embeddings" in output:
+                example["question_embedding"] = output["question_embeddings"].tolist()
+
+
+        if "retrieved_docs" in output:
+            retrieved_docs = output["retrieved_docs"]
+
+            if not self._add_retrieved_docs:
+
+                for doc in retrieved_docs:
+                    if "title" in doc:
+                        del doc["title"]
+
+                    if "text" in doc:
+                        del doc["text"]
+
+            example["retreived_docs"] = retrieved_docs
             # example["predicted_text_greedy"] = output["predicted_text"]
+
 
     def _model_output(self, example):
 

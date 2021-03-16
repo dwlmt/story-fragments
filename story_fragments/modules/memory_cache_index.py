@@ -211,6 +211,10 @@ class MemoryIndex:
         logger.debug(f"Add ids to Faiss: {ids}")
         self.index.add_with_ids(context_hidden_states, ids)
 
+        ids += self.id_offset
+
+        return ids
+
     def remove_ids(self, doc_ids: np.ndarray) -> List[dict]:
         """ Remove from the dictionary and the Faiss index.
         Args:

@@ -497,7 +497,8 @@ class RagMemoryRetriever(RagRetriever):
             context_dicts (List[dict]): A list of dictionaries with the representations. Must contain id, title and text fields.
             context_hidden_states (ndarray): The ndarray is batch size * dim.
         """
-        self.memory_index.add(context_dicts=context_dicts, context_hidden_states=context_hidden_states)
+        ids = self.memory_index.add(context_dicts=context_dicts, context_hidden_states=context_hidden_states)
+        return ids
 
     def clear_memory(self):
         self.memory_index.clear_memory()
