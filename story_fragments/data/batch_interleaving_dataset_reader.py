@@ -5,6 +5,8 @@ from allennlp.common.checks import ConfigurationError
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import MetadataField
 from allennlp.data.instance import Instance
+from allennlp.data.token_indexers import PretrainedTransformerIndexer
+from overrides import overrides
 
 
 @DatasetReader.register("interleaving-batch")
@@ -36,9 +38,10 @@ class InterleavingBatchDatasetReader(DatasetReader):
             readers: Dict[str, DatasetReader],
             dataset_field_name: str = "dataset",
             batch_size: int = 16,
+            lazy: bool = True,
             **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(lazy=lazy, **kwargs)
         self._readers = readers
         self._dataset_field_name = dataset_field_name
 

@@ -1,102 +1,94 @@
 {
-  "dataset_reader": {
+ "dataset_reader": {
     "type": "interleaving-batch",
-    "batch_size": 16,
-    "lazy": true,
-     "readers": {
-      "moviecorpus-interleaved": {
-        "type": "moviecorpus-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 192,
-        "manual_shards": 1,
-        "lazy": true
-      },
-      "bookcorpus-interleaved": {
-        "type": "bookcorpus-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 192,
-        "manual_shards": 1,
-        "lazy": true
-      },
-
-      "gutenberg-interleaved": {
-        "type": "gutenberg-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 192,
-        "manual_shards": 1,
-        "lazy": true
-      }
-    }
-  },
-  "validation_dataset_reader": {
-    "type": "interleaving-batch",
-    "batch_size": 16,
+    "batch_size": 32,
     "lazy": true,
     "readers": {
       "moviecorpus-interleaved": {
         "type": "moviecorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 192,
-        "manual_shards": 1,
+        "encoder_max_length": 384,
         "lazy": true
       },
       "bookcorpus-interleaved": {
         "type": "bookcorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 192,
-        "manual_shards": 1,
+        "encoder_max_length": 384,
         "lazy": true
       },
       "gutenberg-interleaved": {
         "type": "gutenberg-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 192,
-        "manual_shards": 1,
+        "encoder_max_length": 384,
         "lazy": true
       }
     }
   },
-  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_6_label_6_step_6/train\",  \"bookcorpus-interleaved\": \"bookcorpus_context_6_label_6_step_6/train\", \"gutenberg-interleaved\": \"gutenberg_context_6_label_6_step_6/validation\"}",
-  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_6_label_6_step_6/validation\", \"bookcorpus-interleaved\": \"bookcorpus_context_6_label_6_step_6/validation\", \"gutenberg-interleaved\": \"gutenberg_context_6_label_6_step_6/validation\"}",
+  "validation_dataset_reader": {
+    "type": "interleaving-batch",
+    "batch_size": 32,
+    "lazy": true,
+    "readers": {
+      "moviecorpus-interleaved": {
+        "type": "moviecorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 384,
+        "lazy": true
+      },
+      "bookcorpus-interleaved": {
+        "type": "bookcorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 384,
+        "lazy": true
+      },
+      "gutenberg-interleaved": {
+        "type": "gutenberg-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 384,
+        "lazy": true
+      }
+    }
+  },
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/train\",  \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/train\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/train\"}",
+  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/validation\", \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/validation\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/validation\"}",
   "data_loader": {
-    "batch_size": 4,
-    "batches_per_epoch": 50000
+    "batch_size": 8,
+    "batches_per_epoch": 20000
   },
   "validation_data_loader": {
-    "batch_size": 4,
-    "batches_per_epoch": 5000
+    "batch_size": 8,
+    "batches_per_epoch": 2000
   },
   "model": {
     "type": "rag-fragments",
-    "rotate_grad_training": false,
     "generator_name": "facebook/bart-large",
     "retriever_name": "facebook/rag-token-nq",
     "index_name": "custom",
     "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_6_step_3_exact",
     "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_6_step_3_exact.faiss",
     "gradient_checkpointing": true,
-    "ndocs": 5,
-    "max_combined_length": 384,
-    "use_memory_retrieval": true
+    "max_combined_length": 512,
+    "unlikelihood_ratio": 0.5,
+    "rag_text_concat_first": true
   },
    "trainer": {
     "type": "deepspeed",
     "use_amp": false,
     "optimizer": {
       "type": "adam",
-        "lr": 3e-06,
+        "lr": 2e-06,
         "eps": 1e-06
     },
     "deepspeed_config": {
       "optimizer": {
         "params": {
-          "lr": 3e-06,
+          "lr": 2e-06,
           "eps": 1e-06
         },
         "type": "Adam"
@@ -120,7 +112,7 @@
       },
      "fp32_allreduce": false
     },
-    "num_epochs":  40,
+    "num_epochs":  1000,
     "patience": 3,
     "num_gradient_accumulation_steps": 1,
     "checkpointer": {

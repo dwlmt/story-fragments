@@ -42,15 +42,17 @@ class RagFragmentsInferencePredictor(Predictor):
         super().__init__(model, dataset_reader)
 
         self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
+        self._sentence_label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=6))
         self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
+        self._max_passages = int(os.getenv("MAX_PASSAGES", default=1000000))
 
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
         self._keep_embeddings = parse_bool(os.getenv("KEEP_EMBEDDINGS", default="True"))
 
         generator_model_name = str(os.getenv("GENERATOR_MODEL_NAME", default="facebook/bart-base"))
-        generator_max_length = int(os.getenv("GENERATOR_MAX_LENGTH", default=256))
+        generator_max_length = int(os.getenv("GENERATOR_MAX_LENGTH", default=128))
         encoder_model_name = str(os.getenv("ENCODER_MODEL_NAME", default="facebook/dpr-question_encoder-multiset-base"))
-        encoder_max_length = int(os.getenv("ENCODER_MAX_LENGTH", default=256))
+        encoder_max_length = int(os.getenv("ENCODER_MAX_LENGTH", default=512))
         add_special_tokens = parse_bool(os.getenv("ADD_SPECIAL_TOKENS", default="True"))
 
         self.generator_tokenizer = PretrainedTransformerTokenizer(model_name=generator_model_name,
@@ -77,6 +79,9 @@ class RagFragmentsInferencePredictor(Predictor):
 
         self._vader_analyzer = SentimentIntensityAnalyzer()
 
+        # Hacky flag to stop adding duplicates to memory.
+        os.environ['DONT_ADD_TO_MEMORY'] = 'True'
+
     def predict(self, sentences: List[str] = None,  text: str = None, passage: str = None) -> JsonDict:
 
         return self.predict_json({"sentence": sentences, "text": text, "passage": passage})
@@ -87,7 +92,9 @@ class RagFragmentsInferencePredictor(Predictor):
         results["inputs"] = inputs
 
         passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
-                                     sentence_step_size=self._sentence_step_size)
+                                     sentence_label_size=self._sentence_label_size,
+                                     sentence_step_size=self._sentence_step_size,
+                                     max_passages=self._max_passages)
 
         results["passages"] = []
 
@@ -111,7 +118,7 @@ class RagFragmentsInferencePredictor(Predictor):
             if self._keep_embeddings:
                 example["retrieved_doc_embedding"] = outputs["retrieved_doc_embeddings"].tolist()
                 example["generator_enc_embedding"] = outputs["generator_enc_embeddings"].tolist()
-                #example["question_enc_embedding"] = outputs["question_enc_embeddings"].tolist()
+                example["generator_dec_embedding"] = outputs["generator_dec_embeddings"].tolist()
 
             model_outputs_list.append(outputs)
 
@@ -122,8 +129,7 @@ class RagFragmentsInferencePredictor(Predictor):
             if self._add_to_memory:
                 self._model.add_to_memory(example["text"],  add_to_memory=self._add_to_memory)
 
-        for i, (first, second) in enumerate(more_itertools.windowed(model_outputs_list, n=2, step=1)):
-
+        for i, (first, second) in enumerate(more_itertools.pairwise(model_outputs_list)):
 
             if first == None or second == None:
                 continue
@@ -158,16 +164,11 @@ class RagFragmentsInferencePredictor(Predictor):
                 res_dict[f"{name}_l1_dist"] = l1_dist.item()
                 res_dict[f"{name}_l2_dist"] = l2_dist.item()
                 res_dict[f"{name}_cosine_sim"] = cosine_sim.item()
-                res_dict[f"{name}_cosine_dist"] = cosine_dist.item()
                 res_dict[f"{name}_dot_product"] = dot_product.item()
                 res_dict[f"{name}_wasserstein_dist"] = wass_dist
 
                 return  res_dict
 
-            first_doc_emb = torch.tensor(first["retrieved_doc_embeddings"])
-            second_doc_emb = torch.tensor(second["retrieved_doc_embeddings"])
-            metrics = vector_distance_metrics("retrieved_doc_embedding", first_doc_emb, second_doc_emb)
-            results["passages"][i]["prediction_metrics"] = metrics
 
             first_doc_emb = torch.tensor(first["retrieved_doc_embeddings"])
             second_doc_emb = torch.tensor(second["retrieved_doc_embeddings"])
@@ -178,6 +179,11 @@ class RagFragmentsInferencePredictor(Predictor):
             second_doc_emb = torch.tensor(second["generator_enc_embeddings"])
             metrics = vector_distance_metrics("generator_enc_embedding", first_doc_emb, second_doc_emb)
             results["passages"][i]["prediction_metrics"] = {**metrics,**results["passages"][i]["prediction_metrics"]}
+
+            first_doc_emb = torch.tensor(first["generator_dec_embeddings"])
+            second_doc_emb = torch.tensor(second["generator_dec_embeddings"])
+            metrics = vector_distance_metrics("generator_dec_embedding", first_doc_emb, second_doc_emb)
+            results["passages"][i]["prediction_metrics"] = {**metrics, **results["passages"][i]["prediction_metrics"]}
 
             if "perplexity" in first:
                 results["passages"][i]["prediction_metrics"]["perplexity"] = first["perplexity"].item()

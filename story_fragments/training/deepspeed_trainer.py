@@ -11,6 +11,7 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 from allennlp.common.util import int_to_device
 
 import torch
+#import deepspeed
 import torch.distributed as dist
 from torch.cuda import amp
 from torch.cuda.amp import autocast
@@ -63,7 +64,7 @@ class DeepspeedTrainer(Trainer):
             batch_callbacks: List[BatchCallback] = None,
             epoch_callbacks: List[EpochCallback] = None,
             distributed: bool = False,
-            local_rank: int = 0,
+            local_rank: int = -0,
             world_size: int = 1,
             num_gradient_accumulation_steps: int = 1,
             use_amp: bool = False,
@@ -133,6 +134,12 @@ class DeepspeedTrainer(Trainer):
         self._pytorch_model = self.model
 
         self._ds_config = deepspeed_config
+
+        os.environ["LOCAL_RANK"] = f"{local_rank}"
+
+        #model = self.model.cpu()
+        #with deepspeed.zero.Init():
+
         self.model_engine, self.ds_optimizer, _, _ = self._ds_config.launch(
             self.model,
             None,  # self.optimizer,
@@ -150,6 +157,8 @@ class DeepspeedTrainer(Trainer):
         # batch = nn_util.move_to_device(batch, self.cuda_device)
         batch = nn_util.move_to_device(batch, self.model_engine.device)
         output_dict = self.model_engine(**batch)
+
+        print(output_dict)
 
         if for_training:
             try:

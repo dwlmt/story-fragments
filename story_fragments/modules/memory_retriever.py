@@ -16,12 +16,13 @@
 
 import re
 import time
+from random import random, randint
 from typing import List, Tuple, Optional
 
 import numpy as np
 from datasets import load_dataset
 from more_itertools import chunked
-from transformers import BatchEncoding
+from transformers import BatchEncoding, DPRContextEncoderTokenizerFast
 from transformers.models.rag.retrieval_rag import RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CustomHFIndex, \
     CanonicalHFIndex, HFIndexBase
 from transformers.utils import logging
@@ -51,7 +52,7 @@ class CustomMemoryHFIndex(CustomHFIndex):
     def get_doc_dicts(self, doc_ids: np.ndarray) -> List[dict]:
         return [self.dataset[doc_ids[i].tolist()] for i in range(doc_ids.shape[0])]
 
-    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs=5) -> Tuple[np.ndarray, np.ndarray]:
+    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: int = 5) -> Tuple[np.ndarray, np.ndarray]:
         distances, ids = self.dataset.search_batch("embeddings", question_hidden_states, n_docs)
         docs = [self.dataset[[i for i in indices if i >= 0]] for indices in ids]
         vectors = [doc["embeddings"] for doc in docs]
@@ -61,8 +62,12 @@ class CustomMemoryHFIndex(CustomHFIndex):
         return np.array(ids), np.array(vectors), distances  # shapes (batch_size, n_docs) and (batch_size, n_docs, d)
 
     def get_doc_dict(self, doc_id: int):
-
-        return self.dataset[doc_id]
+        if doc_id >= 0:
+            return self.dataset[doc_id]
+        else:
+            dataset_size = len(self.dataset)
+            rand_idx = randint(0, dataset_size)
+            return self.dataset[rand_idx]
 
 
 class CanonicalMemoryHFIndex(HFIndexBase):
@@ -123,8 +128,12 @@ class CanonicalMemoryHFIndex(HFIndexBase):
         return np.array(ids), np.array(vectors), distances  # shapes (batch_size, n_docs) and (batch_size, n_docs, d)
 
     def get_doc_dict(self, doc_id: int):
-
-        return self.dataset[doc_id]
+        if doc_id >= 0:
+            return self.dataset[doc_id]
+        else:
+            dataset_size = len(self.dataset)
+            rand_idx = randint(0,dataset_size)
+            return self.dataset[rand_idx]
 
 
 class RagMemoryRetriever(RagRetriever):
@@ -153,15 +162,13 @@ class RagMemoryRetriever(RagRetriever):
 
         super().__init__(config, question_encoder_tokenizer, generator_tokenizer, index=index)
 
-        if config.use_memory_retrieval:
-            self.memory_index = MemoryIndex(capacity=config.memory_capacity, buffer=config.memory_buffer,
+
+        self.memory_index = MemoryIndex(capacity=config.memory_capacity, buffer=config.memory_buffer,
                                             lru=config.memory_lru)
 
-        else:
-            self.memory_index = None
+        self.config = config
 
-        self.use_dataset_retrieval = config.use_dataset_retrieval
-        self.use_memory_retrieval = config.use_memory_retrieval
+        self.ctx_tokenizer = DPRContextEncoderTokenizerFast.from_pretrained(config.context_encoder)
 
     @staticmethod
     def _build_index(config):
@@ -194,92 +201,69 @@ class RagMemoryRetriever(RagRetriever):
         distances_batched = []
         source_batched = []
 
-        if self.use_dataset_retrieval:
+        if self.config.n_docs != 0:
             for question_hidden_states in self._chunk_tensor(question_hidden_states, self.batch_size):
-                start_time = time.time()
 
-                ids, vectors, distances = self.index.get_top_docs(question_hidden_states, self.config.n_docs)
-                logger.debug(f"Dataset retrieval: {ids}, {vectors.shape}, {distances}")
-                logger.debug(
-                    "index search time: {} sec, batch size {}".format(
-                        time.time() - start_time, question_hidden_states.shape
-                    )
-                )
+                config_n_docs = self.config.n_docs
 
-                empty = np.where(ids == -1)[0]
+                ids, vectors, distances = self.index.get_top_docs(question_hidden_states, config_n_docs)
 
-                if len(empty) == 0:
-                    ids_batched.append(ids)
-                    vectors_batched.append(vectors)
-                    source_batched.append(np.ones(ids.shape, dtype=np.int))
-                    distances_batched.append(distances)
+                if ids.shape[1] == 0:
+                    continue
 
-        if self.use_memory_retrieval:
+                ids_batched.append(ids)
+                vectors_batched.append(vectors)
+                source_batched.append(np.ones(ids.shape, dtype=np.int))
+                distances_batched.append(distances)
+
+        if self.config.memory_n_docs != 0:
             for question_hidden_states in self._chunk_tensor(question_hidden_states, self.batch_size):
-                start_time = time.time()
+
+                memory_n_docs = self.config.memory_n_docs
 
                 memory_ids, memory_vectors, memory_distances = self.memory_index.get_top_docs(question_hidden_states,
-                                                                                              self.config.memory_n_docs)
+                                                                                              memory_n_docs)
+
+                if memory_ids.shape[1] == 0:
+                    continue
 
                 if self.config.memory_retrieval_weighting != 1.0:
                     memory_distances = [m * self.config.memory_retrieval_weighting for m in memory_distances]
 
-                logger.debug(f"Memory retrieval: {memory_ids}, {memory_vectors.shape}, {memory_distances}")
-                logger.debug(
-                    "memory index search time: {} sec, batch size {}".format(
-                        time.time() - start_time, question_hidden_states.shape
-                    )
-                )
+                ids_batched.append(memory_ids)
+                vectors_batched.append(memory_vectors)
 
-                empty = np.where(memory_ids == -1)[0]
+                source_batched.append(np.zeros(memory_ids.shape, dtype=np.int))
+                distances_batched.append(memory_distances)
 
-                if len(empty) == 0:
-                    ids_batched.append(memory_ids)
-                    vectors_batched.append(memory_vectors)
+        n_docs = abs(n_docs)
 
-                    source_batched.append(np.zeros(memory_ids.shape, dtype=np.int))
-                    distances_batched.append(memory_distances)
-
-        # print(f"Ids batched: {ids_batched}")
-
-        if self.use_memory_retrieval and self.use_dataset_retrieval:
-            if len(ids_batched) == 1:
-                ids_arr = np.array(ids_batched[0])
-                vectors_arr = np.array(vectors_batched[0])
-                distances_arr = np.array(distances_batched[0])
-                sources_arr = np.array(source_batched[0])
-
-            else:
-                ids_arr = np.concatenate([np.array(a) for a in ids_batched], axis=1)
-                vectors_arr = np.concatenate([np.array(a) for a in vectors_batched], axis=1)
-                distances_arr = np.concatenate([np.array(a) for a in distances_batched], axis=1)
-                sources_arr = np.concatenate([np.array(a) for a in source_batched], axis=1)
-
-            # print(f"Ids concat: {ids_arr}")
-
-            if ids_arr.shape[1] > self.config.combined_n_docs:
-                sorted_indices = np.argsort(-(distances_arr), axis=1)
-
-                ids_arr = np.take_along_axis(ids_arr, sorted_indices, axis=1)
-                distances_arr = np.take_along_axis(distances_arr, sorted_indices, axis=1)
-                vectors_arr = np.take_along_axis(vectors_arr, np.expand_dims(sorted_indices, axis=2), axis=1)
-                sources_arr = np.take_along_axis(sources_arr, sorted_indices, axis=1)
-
-                # print(f"Sorted: {ids_arr}, {distances_arr}")
-
-                ids_arr = ids_arr[:, 0: n_docs]
-                distances_arr = distances_arr[:, 0: n_docs]
-                vectors_arr = vectors_arr[:, 0: n_docs]
-                sources_arr = sources_arr[:, 0: n_docs]
-
-        else:
-
+        if len(ids_batched) == 1:
             ids_arr = np.array(ids_batched[0])
             vectors_arr = np.array(vectors_batched[0])
             distances_arr = np.array(distances_batched[0])
             sources_arr = np.array(source_batched[0])
 
-        # print(f"Truncated: {ids_arr}, {distances_arr}")
+        else:
+            ids_arr = np.concatenate([np.array(a) for a in ids_batched], axis=1)
+            vectors_arr = np.concatenate([np.array(a) for a in vectors_batched], axis=1)
+            distances_arr = np.concatenate([np.array(a) for a in distances_batched], axis=1)
+            sources_arr = np.concatenate([np.array(a) for a in source_batched], axis=1)
+
+        if ids_arr.shape[1] > n_docs:
+            sorted_indices = np.argsort(-(distances_arr), axis=1)
+
+            ids_arr = np.take_along_axis(ids_arr, sorted_indices, axis=1)
+            distances_arr = np.take_along_axis(distances_arr, sorted_indices, axis=1)
+            vectors_arr = np.take_along_axis(vectors_arr, np.expand_dims(sorted_indices, axis=2), axis=1)
+            sources_arr = np.take_along_axis(sources_arr, sorted_indices, axis=1)
+
+            # print(f"Sorted: {ids_arr}, {distances_arr}")
+
+            ids_arr = ids_arr[:, 0: n_docs]
+            distances_arr = distances_arr[:, 0: n_docs]
+            vectors_arr = vectors_arr[:, 0: n_docs]
+            sources_arr = sources_arr[:, 0: n_docs]
 
         return (
             ids_arr,
@@ -309,6 +293,9 @@ class RagMemoryRetriever(RagRetriever):
             - **doc_dicts** (:obj:`List[dict]`): The :obj:`retrieved_doc_embeds` examples per query.
         """
         doc_ids, retrieved_doc_embeds, distances, sources = self._main_retrieve(question_hidden_states, n_docs)
+
+        if n_docs < 0:
+            doc_ids = [-d for d in n_docs]
 
         doc_dicts = []
         # print(f"Doc ids: {doc_ids}")
@@ -384,22 +371,41 @@ class RagMemoryRetriever(RagRetriever):
 
             if prefix is None:
                 prefix = ""
-            out = (f"{prefix} {doc_title} {title_sep} {doc_text} {self.config.doc_sep} {input_string}")
+
+            if self.config.rag_text_concat_first:
+                out = (f"{input_string} {self.config.doc_sep} {prefix} {doc_title} {title_sep} {doc_text} ")
+            else:
+                out = (f"{prefix} {doc_title} {title_sep} {doc_text} {self.config.doc_sep} {input_string}")
+
+            doc_out =  (f"{prefix} {doc_title} {title_sep} {doc_text}")
+
             out = _RE_COMBINE_WHITESPACE.sub(" ", out).strip()
+            doc_out = _RE_COMBINE_WHITESPACE.sub(" ", doc_out).strip()
 
-            return out
+            return out, doc_out
 
-        # print(f"Indices {len(docs)}, {n_docs}, {len(input_strings)}, {len( docs[0]['title'])},  {docs[0]['text']}")
-        rag_input_strings = [
-            cat_input_and_doc(
-                docs[i]["title"][j],
-                docs[i]["text"][j],
-                input_strings[i],
-                prefix,
-            )
-            for i in range(min(len(docs), len(input_strings)))
-            for j in range(n_docs)
-        ]
+        actual_n_docs = n_docs#min(n_docs, len(docs) )
+
+        if actual_n_docs > 0:
+
+            processed_strings = [
+                cat_input_and_doc(
+                    docs[i]["title"][j],
+                    docs[i]["text"][j],
+                    input_strings[i],
+                    prefix,
+                )
+                for i in range(min(len(docs), len(input_strings)))
+                for j in range(actual_n_docs)
+            ]
+
+            processed_zipped = list(zip(*processed_strings))
+            rag_input_strings = list(processed_zipped[0])
+            document_strings = list(processed_zipped[1])
+
+        else:
+            rag_input_strings = input_strings
+            document_strings = [" "] * len(input_strings)
 
         contextualized_inputs = self.generator_tokenizer.batch_encode_plus(
             rag_input_strings,
@@ -408,9 +414,16 @@ class RagMemoryRetriever(RagRetriever):
             padding="max_length",
             truncation=True,
         )
-        # logger.info(f"Contextualised inputs: {torch.sum((contextualized_inputs['input_ids'] != 1), dim=-1)}, {contextualized_inputs['input_ids'].size()} ")
 
-        return contextualized_inputs["input_ids"], contextualized_inputs["attention_mask"]
+        document_inputs = self.ctx_tokenizer.batch_encode_plus(
+            document_strings,
+            max_length=self.config.max_doc_context_length,
+            return_tensors=return_tensors,
+            padding="max_length",
+            truncation=True,
+        )
+      
+        return contextualized_inputs["input_ids"], contextualized_inputs["attention_mask"], document_inputs["input_ids"], document_inputs["attention_mask"]
 
     def __call__(
             self,
@@ -461,7 +474,8 @@ class RagMemoryRetriever(RagRetriever):
         # print(f"Question input ids: {question_input_ids.size()}")
         input_strings = self.question_encoder_tokenizer.batch_decode(question_input_ids, skip_special_tokens=True)
         # print(f"Input strings: {len(input_strings)}")
-        context_input_ids, context_attention_mask = self.postprocess_docs(
+        context_input_ids, context_attention_mask,\
+            doc_input_ids, doc_attention_mask = self.postprocess_docs(
             docs, input_strings, prefix, n_docs, return_tensors=return_tensors
         )
 
@@ -470,7 +484,9 @@ class RagMemoryRetriever(RagRetriever):
                 "context_input_ids": context_input_ids,
                 "context_attention_mask": context_attention_mask,
                 "retrieved_doc_embeds": retrieved_doc_embeds,
-                "doc_ids": doc_ids
+                "doc_ids": doc_ids,
+                "doc_input_ids": doc_input_ids,
+                "doc_attention_mask": doc_attention_mask,
             },
             tensor_type=return_tensors,
         )
@@ -481,9 +497,8 @@ class RagMemoryRetriever(RagRetriever):
             context_dicts (List[dict]): A list of dictionaries with the representations. Must contain id, title and text fields.
             context_hidden_states (ndarray): The ndarray is batch size * dim.
         """
-        if self.memory_index is not None:
-            self.memory_index.add(context_dicts=context_dicts, context_hidden_states=context_hidden_states)
+        ids = self.memory_index.add(context_dicts=context_dicts, context_hidden_states=context_hidden_states)
+        return ids
 
     def clear_memory(self):
-
         self.memory_index.clear_memory()

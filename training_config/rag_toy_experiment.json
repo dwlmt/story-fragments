@@ -1,58 +1,81 @@
 {
   "dataset_reader": {
-    "type": "interleaving",
-    "readers": {
-      "writingprompts-interleaved": {
-        "type": "writingprompts-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 128,
-        "lazy": true
-      },
-      "wikiplots-interleaved": {
-        "type": "wikiplots-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 128,
-        "lazy": true
-      }
-    }
+    "type": "gutenberg-interleaved",
+      "generator_model_name": "facebook/bart-base",
+      "generator_max_length": 128,
+      "encoder_max_length": 384,
+      "lazy": true
   },
-  "train_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy/train\", \"writingprompts-interleaved\": \"writingprompts_dummy/train\"}",
-  "validation_data_path": "{\"wikiplots-interleaved\": \"wikiplots_dummy/validation\", \"writingprompts-interleaved\": \"writingprompts_dummy/validation\"}",
+  "validation_dataset_reader": {
+      "type": "gutenberg-interleaved",
+      "generator_model_name": "facebook/bart-base",
+      "generator_max_length": 128,
+      "encoder_max_length": 384,
+      "lazy": true
+  },
+  "train_data_path": "gutenberg_dummy_12_label_12_step_12/train",
+  "validation_data_path": "gutenberg_dummy_12_label_12_step_12/validation",
   "data_loader": {
-    "batch_size": 3,
-    "batches_per_epoch": 10000
+    "batch_size": 8,
+    "batches_per_epoch": 100
   },
   "validation_data_loader": {
-    "batch_size": 3,
-    "batches_per_epoch": 1000
+    "batch_size": 8,
+    "batches_per_epoch": 100
   },
   "model": {
     "type": "rag-fragments",
-    "rotate_grad_training": true,
-    "generator_name": "facebook/bart-base",
+    "rag_text_concat_first": true,
+    "generator_name": "facebook/bart-large",
+    "retriever_name": "facebook/rag-token-nq",
     "index_name": "custom",
-    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact",
-    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss"
+    "passages_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_6_step_3_exact",
+    "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_6_step_3_exact.faiss",
+    "gradient_checkpointing": true,
+    "ndocs": 5,
+    "max_combined_length": 512,
+    "train_context_encoder": true
   },
   "trainer": {
-    "num_epochs": 50,
-    "patience": 2,
+    "type": "deepspeed",
+    "use_amp": false,
     "optimizer": {
       "type": "adam",
-      "lr": 0.0001
+        "lr": 2e-06,
+        "eps": 1e-06
     },
-    "learning_rate_scheduler": {
-      "type": "reduce_on_plateau",
-      "factor": 0.5,
-      "patience": 0
+    "deepspeed_config": {
+      "optimizer": {
+        "params": {
+          "lr": 2e-06,
+          "eps": 1e-06
+        },
+        "type": "Adam"
+      },
+      "gradient_clipping": 1.0,
+      "amp": {
+        "enabled": false
+      },
+      "fp16": {
+        "enabled": true
+      },
+      "zero_optimization": {
+       "stage": 3,
+       "overlap_comm": true,
+       "cpu_offload": true
+      },
+     "fp32_allreduce": false
     },
-    "grad_norm": 1.0,
-    "grad_clipping": 10.0,
+    "num_epochs":  1,
+    "patience": 3,
     "checkpointer": {
-      "num_serialized_models_to_keep": 2
-    },
-    "use_amp": true
+      "num_serialized_models_to_keep": 1
+    }
+  },
+  "distributed": {
+    "cuda_devices": [
+      0,
+      1
+    ]
   }
 }

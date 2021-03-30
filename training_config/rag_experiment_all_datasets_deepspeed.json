@@ -59,7 +59,7 @@
     "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
     "gradient_checkpointing": true,
     "ndocs": 5,
-    "max_combined_length": 320,
+    "max_combined_length": 384,
     "use_memory_retrieval": true
   },
   "trainer": {
@@ -98,7 +98,7 @@
       "fp32_allreduce": false
     },
     "num_epochs": 5,
-    "patience": 2,
+    "patience": 3,
     "num_gradient_accumulation_steps": 2,
     "checkpointer": {
       "num_serialized_models_to_keep": 1

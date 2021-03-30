@@ -2,15 +2,16 @@
   "dataset_reader": {
     "type": "interleaving-batch",
     "batch_size": 16,
+    "lazy": true,
     "readers": {
-      "moviecorpus-interleaved": {
+       "moviecorpus-interleaved": {
         "type": "moviecorpus-interleaved",
         "encoder_model_name": "bert-base-cased",
         "generator_model_name": "bert-base-cased",
         "generator_max_length": 128,
         "encoder_max_length": 128,
-        "search_negative_labels": true,
-        "max_instances": 500000,
+        "search_negative_labels": false,
+        "manual_shards": 1,
         "lazy": true
       },
       "schmoop-interleaved": {
@@ -20,8 +21,7 @@
         "generator_max_length": 128,
         "encoder_max_length": 128,
         "manual_shards": 1,
-        "search_negative_labels": true,
-         "max_instances": 500000,
+        "search_negative_labels": false,
         "lazy": true
       },
       "bookcorpus-interleaved": {
@@ -30,8 +30,8 @@
         "generator_model_name": "bert-base-cased",
         "generator_max_length": 128,
         "encoder_max_length": 128,
-        "search_negative_labels": true,
-         "max_instances": 500000,
+        "search_negative_labels": false,
+        "manual_shards": 1,
         "lazy": true
       },
       "writingprompts-interleaved": {
@@ -40,8 +40,8 @@
         "generator_model_name": "bert-base-cased",
         "generator_max_length": 128,
         "encoder_max_length": 128,
-        "search_negative_labels": true,
-         "max_instances": 500000,
+        "search_negative_labels": false,
+        "manual_shards": 1,
         "lazy": true
       },
       "wikiplots-interleaved": {
@@ -50,8 +50,65 @@
         "generator_model_name": "bert-base-cased",
         "generator_max_length": 128,
         "encoder_max_length": 128,
-        "search_negative_labels": true,
-         "max_instances": 500000,
+        "search_negative_labels": false,
+        "manual_shards": 1,
+        "lazy": true
+      }
+    }
+  },
+  "validation_dataset_reader": {
+    "type": "interleaving-batch",
+    "batch_size": 16,
+    "lazy": true,
+    "readers": {
+      "moviecorpus-interleaved": {
+        "type": "moviecorpus-interleaved",
+        "encoder_model_name": "bert-base-cased",
+        "generator_model_name": "bert-base-cased",
+        "generator_max_length": 128,
+        "encoder_max_length": 128,
+        "search_negative_labels": false,
+        "manual_shards": 1,
+        "lazy": true
+      },
+      "schmoop-interleaved": {
+        "type": "schmoop-interleaved",
+        "encoder_model_name": "bert-base-cased",
+        "generator_model_name": "bert-base-cased",
+        "generator_max_length": 128,
+        "encoder_max_length": 128,
+        "manual_shards": 1,
+        "search_negative_labels": false,
+        "lazy": true
+      },
+      "bookcorpus-interleaved": {
+        "type": "bookcorpus-interleaved",
+        "encoder_model_name": "bert-base-cased",
+        "generator_model_name": "bert-base-cased",
+        "generator_max_length": 128,
+        "encoder_max_length": 128,
+        "search_negative_labels": false,
+        "manual_shards": 1,
+        "lazy": true
+      },
+      "writingprompts-interleaved": {
+        "type": "writingprompts-interleaved",
+        "encoder_model_name": "bert-base-cased",
+        "generator_model_name": "bert-base-cased",
+        "generator_max_length": 128,
+        "encoder_max_length": 128,
+        "search_negative_labels": false,
+        "manual_shards": 1,
+        "lazy": true
+      },
+      "wikiplots-interleaved": {
+        "type": "wikiplots-interleaved",
+        "encoder_model_name": "bert-base-cased",
+        "generator_model_name": "bert-base-cased",
+        "generator_max_length": 128,
+        "encoder_max_length": 128,
+        "search_negative_labels": false,
+        "manual_shards": 1,
         "lazy": true
       }
     }
@@ -76,7 +133,7 @@
     "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
     "gradient_checkpointing": true,
     "ndocs": 5,
-    "max_combined_length": 320,
+    "max_combined_length": 384,
     "use_memory_retrieval": true
   },
    "trainer": {
@@ -115,7 +172,7 @@
      "fp32_allreduce": false
     },
     "num_epochs": 20,
-    "patience": 2,
+    "patience": 3,
     "num_gradient_accumulation_steps": 1,
     "checkpointer": {
       "num_serialized_models_to_keep": 1

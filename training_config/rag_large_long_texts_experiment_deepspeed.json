@@ -2,6 +2,7 @@
   "dataset_reader": {
     "type": "interleaving-batch",
     "batch_size": 16,
+    "lazy": true,
     "readers": {
       "moviecorpus-interleaved": {
         "type": "moviecorpus-interleaved",
@@ -9,7 +10,6 @@
         "generator_max_length": 128,
         "encoder_max_length": 192,
         "manual_shards": 1,
-        "max_instances": 500000,
         "lazy": true
       },
       "schmoop-interleaved": {
@@ -18,7 +18,6 @@
         "generator_max_length": 128,
         "encoder_max_length": 192,
         "manual_shards": 1,
-        "max_instances": 500000,
         "lazy": true
       },
       "bookcorpus-interleaved": {
@@ -27,7 +26,37 @@
         "generator_max_length": 128,
         "encoder_max_length": 192,
         "manual_shards": 1,
-        "max_instances": 500000,
+        "lazy": true
+      }
+    }
+  },
+  "validation_dataset_reader": {
+    "type": "interleaving-batch",
+    "batch_size": 16,
+    "lazy": true,
+    "readers": {
+      "moviecorpus-interleaved": {
+        "type": "moviecorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
+        "lazy": true
+      },
+      "schmoop-interleaved": {
+        "type": "schmoop-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
+        "lazy": true
+      },
+      "bookcorpus-interleaved": {
+        "type": "bookcorpus-interleaved",
+        "generator_model_name": "facebook/bart-base",
+        "generator_max_length": 128,
+        "encoder_max_length": 192,
+        "manual_shards": 1,
         "lazy": true
       }
     }
@@ -36,11 +65,11 @@
   "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_4_label_4_step_4/validation\", \"schmoop-interleaved\": \"schmoop_context_4_label_4_step_4/valid\", \"bookcorpus-interleaved\": \"bookcorpus_context_4_label_4_step_4/validation\"}",
   "data_loader": {
     "batch_size": 4,
-    "batches_per_epoch": 15000
+    "batches_per_epoch": 50000
   },
   "validation_data_loader": {
     "batch_size": 4,
-    "batches_per_epoch": 1500
+    "batches_per_epoch": 5000
   },
   "model": {
     "type": "rag-fragments",
@@ -52,7 +81,7 @@
     "index_path": "/home/s1569885/datasets/wikiplots_dpr/wikiplots_20200701_dpr_window_4_step_2_exact.faiss",
     "gradient_checkpointing": true,
     "ndocs": 5,
-    "max_combined_length": 320,
+    "max_combined_length": 384,
     "use_memory_retrieval": true
   },
    "trainer": {
@@ -90,8 +119,8 @@
       },
      "fp32_allreduce": false
     },
-    "num_epochs": 15,
-    "patience": 2,
+    "num_epochs": 10,
+    "patience": 3,
     "num_gradient_accumulation_steps": 1,
     "checkpointer": {
       "num_serialized_models_to_keep": 1

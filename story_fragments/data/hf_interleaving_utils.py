@@ -5,7 +5,6 @@ from collections import deque
 
 import more_itertools
 from blingfire import text_to_sentences
-from datasets import logger
 
 '''
 from nltk.corpus import wordnet
@@ -77,7 +76,6 @@ def interleave_examples(reader, batch_size: int = 1, input_size: int = 1,
     # Iterate over a batch of the input_text.
 
     def read_episode(episode, id):
-        logger.info(f"{episode}")
         text = f"{episode['text']}"
 
         def cleanup_text(text):

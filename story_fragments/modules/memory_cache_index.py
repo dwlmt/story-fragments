@@ -1,3 +1,4 @@
+import copy
 import logging
 from collections import OrderedDict
 from typing import List, Tuple, Any
@@ -68,6 +69,10 @@ class MemoryIndex:
         self.embedding_dim = embedding_dim
         self.id = 0
 
+        ''' This is a hack so that memory has different id range from the knowledgebase.
+        '''
+        self.id_offset = int(1e9 + 1)
+
         self.init_index()
 
         def remove_from_cache(docs: List[Tuple]):
@@ -92,10 +97,22 @@ class MemoryIndex:
         doc_ids = doc_ids.flatten()
         docs = []
         for id in doc_ids:
-            doc_dict = self.cache.get(int(id))
+
+            id = int(id) - self.id_offset
+
+            doc_dict = copy.deepcopy(self.cache.get(int(id)))
             if doc_dict is None:
-                doc_dict = {"id": f"{id}", "text": "<MISSING>", "title": "<MISSING>",
+                doc_dict = {"id": f"{id}", "text": "", "title": "",
                             "embeddings": np.zeros(self.embedding_dim, dtype=np.float32)}
+            else:
+                try:
+                    doc_dict['id'] = f"{int(doc_dict['id']) + self.id_offset}"
+                except TypeError:
+                    pass
+                except ValueError:
+                    pass
+
+
             docs.append(doc_dict)
 
         logging.debug(f"Doc Dicts: {doc_dict['id']}, {doc_dict['title']}, {doc_dict['text']}")
@@ -108,16 +125,30 @@ class MemoryIndex:
             doc_ids (int):
         """
 
-        doc_dict = self.cache.get(int(doc_id))
+        doc_id = int(doc_id) - self.id_offset
+
+
+        if doc_id < 0:
+            cache_size = len(self.cache)
+            doc_id
+
+        doc_dict = copy.deepcopy(self.cache.get(int(doc_id)))
         if doc_dict is None:
-            doc_dict = {"id": f"{doc_id}", "text": "<MISSING>", "title": "<MISSING>",
+            doc_dict = {"id": f"{doc_id}", "text": " ", "title": " ",
                         "embeddings": np.zeros(self.embedding_dim, dtype=np.float32)}
+        else:
+            try:
+                doc_dict['id'] = f"{int(doc_dict['id']) + self.id_offset}"
+            except TypeError:
+                pass
+            except ValueError:
+                pass
 
         logging.debug(f"Doc Dicts: {doc_dict['id']}, {doc_dict['title']}, {doc_dict['text']}")
 
         return doc_dict
 
-    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: (int) = 5) -> Tuple[np.ndarray, np.ndarray]:
+    def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: int = 5) -> Tuple[np.ndarray, np.ndarray]:
         """
         Args:
             question_hidden_states (ndarray): Question states to match against the Faiss index.
@@ -129,7 +160,11 @@ class MemoryIndex:
         """
         assert len(question_hidden_states.shape) == 2
 
-        distances, indices, = self.index.search(np.float32(question_hidden_states), n_docs)
+        if n_docs >= 0:
+            distances, indices, = self.index.search(np.float32(question_hidden_states), n_docs)
+        else:
+            distances, indices, = self.random(np.float32(question_hidden_states), n_docs)
+
 
         embeddings_list = []
         for ind in indices:
@@ -146,6 +181,8 @@ class MemoryIndex:
 
         indices_array = np.asarray(indices)
         embeddings_array = np.asarray(embeddings_list)
+
+        indices_array += self.id_offset
 
         logging.debug(f"Top Docs: {indices}, {distances}")
         return indices_array, embeddings_array, distances
@@ -173,6 +210,10 @@ class MemoryIndex:
 
         logger.debug(f"Add ids to Faiss: {ids}")
         self.index.add_with_ids(context_hidden_states, ids)
+
+        ids += self.id_offset
+
+        return ids
 
     def remove_ids(self, doc_ids: np.ndarray) -> List[dict]:
         """ Remove from the dictionary and the Faiss index.

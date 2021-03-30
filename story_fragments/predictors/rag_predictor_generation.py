@@ -1,4 +1,5 @@
 import os
+import re
 from random import random, choice
 from typing import List
 
@@ -17,6 +18,7 @@ from story_fragments.predictors.utils import input_to_passages
 def parse_bool(b):
     return b == "True" or b == "TRUE" or b == "true" or b == "1"
 
+_RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
 @Predictor.register("rag-fragments-generation")
 class RagFragmentsGenerationPredictor(Predictor):
@@ -29,14 +31,16 @@ class RagFragmentsGenerationPredictor(Predictor):
     ) -> None:
         super().__init__(model, dataset_reader)
 
-        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=6))
-        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=6))
+        self._sentence_batch_size = int(os.getenv("SENTENCE_BATCH_SIZE", default=12))
+        self._sentence_label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=12))
+        self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
+        self._max_passages = int(os.getenv("MAX_PASSAGES", default=1000000))
 
         self._length_to_generate = int(os.getenv("GENERATE_LENGTH", default=50))
 
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
-        self._min_length = int(os.getenv("MIN_LENGTH", default=20))
-        self._max_length = int(os.getenv("MIN_LENGTH", default=128))
+        self._min_length = int(os.getenv("MIN_LENGTH", default=128))
+        self._max_length = int(os.getenv("MAX_LENGTH", default=256))
         self._repetition_penalty = float(os.getenv("REPETITION_PENALTY", default=1.0))
         self._num_return_sequences = int(os.getenv("NUM_RETURN_SEQUENCES", default=1))
         self._no_repeat_ngram_size = int(os.getenv("NO_REPEAT_NGRAM_SIZE", default=4))
@@ -59,16 +63,23 @@ class RagFragmentsGenerationPredictor(Predictor):
     def predict_json(self, inputs: JsonDict) -> JsonDict:
         results = {}
 
-        results["inputs"] = inputs
-        results["generated"] = []
+        if "title" in inputs:
+            results["title"] = inputs["title"]
 
-        passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size, sentence_step_size=self._sentence_step_size)
+        if "id" in inputs:
+            results["id"] = inputs["id"]
+
+        results["passages"] = []
+
+        passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
+                                     sentence_label_size=self._sentence_label_size,
+                                     sentence_step_size=self._sentence_step_size,  max_passages=self._max_passages)
 
         for i, batch in enumerate(passages):
             sentences_joined = batch['text']
 
             #results["inputs"]["passages"].append(sentences_joined)
-            results["generated"].append(batch)
+            results["passages"].append(batch)
 
             print(f"{sentences_joined}")
 
@@ -103,7 +114,7 @@ class RagFragmentsGenerationPredictor(Predictor):
                     next_passage["text"] = generated["text"]
 
                     generated["prompt"] = False
-                    results["generated"].append(next_passage)
+                    results["passages"].append(next_passage)
 
                     sentences_joined = generated["text"]
 
@@ -112,6 +123,9 @@ class RagFragmentsGenerationPredictor(Predictor):
                 self._model.add_to_memory(sentences_joined,  add_to_memory=self._add_to_memory)
 
         self._model.clear_memory()
+
+        story = " ".join([p["text"] for p in results["passages"]])
+        results["story"] = _RE_COMBINE_WHITESPACE.sub(" ", story).strip()
 
         return results
 

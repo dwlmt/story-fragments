@@ -51,6 +51,7 @@ class RagMemoryConfig(RagConfig):
             output_retrieved=False,
             use_dataset_retrieval=True,
             use_memory_retrieval=True,
+            rag_text_concat_first=False,
             memory_n_docs: int = 5,
             memory_capacity: int = 19000,
             memory_buffer=1000,
@@ -62,6 +63,8 @@ class RagMemoryConfig(RagConfig):
             entmax: bool = False,
             entmax_k: int = 512,
             memory_retrieval_weighting: float = 1.0,
+            train_context_encoder: bool = False,
+            max_doc_context_length: int = 256,
             **kwargs
     ):
         super().__init__(
@@ -94,8 +97,9 @@ class RagMemoryConfig(RagConfig):
         )
 
         self.embeddings_name = embeddings_name
-        self.use_dataset_retrieval = use_dataset_retrieval
-        self.use_memory_retrieval = use_memory_retrieval
+        #self.use_dataset_retrieval = use_dataset_retrieval REDUNDANT - Kept so can reuse old models.
+        #self.use_memory_retrieval = use_memory_retrieval REDUNDANT - Kept so can reuse old models.
+        self.rag_text_concat_first = rag_text_concat_first
         self.memory_n_docs = memory_n_docs
         self.memory_capacity = memory_capacity
         self.memory_buffer = memory_buffer
@@ -107,3 +111,5 @@ class RagMemoryConfig(RagConfig):
         self.entmax = entmax
         self.entmax_k = entmax_k
         self.memory_retrieval_weighting = memory_retrieval_weighting
+        self.train_context_encoder = train_context_encoder
+        self.max_doc_context_length = max_doc_context_length
