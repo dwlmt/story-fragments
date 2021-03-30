@@ -1,5 +1,5 @@
 {
-  "dataset_reader": {
+ "dataset_reader": {
     "type": "interleaving-batch",
     "batch_size": 32,
     "lazy": true,
@@ -9,7 +9,6 @@
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 384,
-        "manual_shards": 1,
         "lazy": true
       },
       "bookcorpus-interleaved": {
@@ -17,7 +16,6 @@
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 384,
-        "manual_shards": 1,
         "lazy": true
       },
       "gutenberg-interleaved": {
@@ -25,7 +23,6 @@
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 384,
-        "manual_shards": 1,
         "lazy": true
       }
     }
@@ -40,7 +37,6 @@
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 384,
-        "manual_shards": 1,
         "lazy": true
       },
       "bookcorpus-interleaved": {
@@ -48,7 +44,6 @@
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 384,
-        "manual_shards": 1,
         "lazy": true
       },
       "gutenberg-interleaved": {
@@ -56,16 +51,15 @@
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
         "encoder_max_length": 384,
-        "manual_shards": 1,
         "lazy": true
       }
     }
   },
-  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/train\",  \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/train\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/validation\"}",
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/train\",  \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/train\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/train\"}",
   "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/validation\", \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/validation\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/validation\"}",
   "data_loader": {
     "batch_size": 8,
-    "batches_per_epoch": 25000
+    "batches_per_epoch": 20000
   },
   "validation_data_loader": {
     "batch_size": 8,

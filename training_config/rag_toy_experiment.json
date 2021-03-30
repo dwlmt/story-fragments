@@ -1,68 +1,20 @@
 {
   "dataset_reader": {
-    "type": "interleaving-batch",
-    "batch_size": 32,
-    "lazy": true,
-    "readers": {
-      "moviecorpus-interleaved": {
-        "type": "moviecorpus-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
-      },
-      "bookcorpus-interleaved": {
-        "type": "bookcorpus-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
-      },
-      "gutenberg-interleaved": {
-        "type": "gutenberg-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
-      }
-    }
+    "type": "gutenberg-interleaved",
+      "generator_model_name": "facebook/bart-base",
+      "generator_max_length": 128,
+      "encoder_max_length": 384,
+      "lazy": true
   },
   "validation_dataset_reader": {
-    "type": "interleaving-batch",
-    "batch_size": 32,
-    "lazy": true,
-    "readers": {
-      "moviecorpus-interleaved": {
-        "type": "moviecorpus-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
-      },
-      "bookcorpus-interleaved": {
-        "type": "bookcorpus-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
-      },
-      "gutenberg-interleaved": {
-        "type": "gutenberg-interleaved",
-        "generator_model_name": "facebook/bart-base",
-        "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
-      }
-    }
+      "type": "gutenberg-interleaved",
+      "generator_model_name": "facebook/bart-base",
+      "generator_max_length": 128,
+      "encoder_max_length": 384,
+      "lazy": true
   },
-  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_12_label_12_step_12/train\",  \"bookcorpus-interleaved\": \"bookcorpus_dummy_12_label_12_step_12/train\", \"gutenberg-interleaved\": \"gutenberg_dummy_12_label_12_step_12/validation\"}",
-  "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_dummy_12_label_12_step_12/validation\", \"bookcorpus-interleaved\": \"bookcorpus_dummy_12_label_12_step_12/validation\", \"gutenberg-interleaved\": \"gutenberg_dummy_12_label_12_step_12/validation\"}",
+  "train_data_path": "gutenberg_dummy_12_label_12_step_12/train",
+  "validation_data_path": "gutenberg_dummy_12_label_12_step_12/validation",
   "data_loader": {
     "batch_size": 8,
     "batches_per_epoch": 100
@@ -82,8 +34,7 @@
     "gradient_checkpointing": true,
     "ndocs": 5,
     "max_combined_length": 512,
-    "use_memory_retrieval": true,
-    "entmax": true
+    "train_context_encoder": true
   },
   "trainer": {
     "type": "deepspeed",
@@ -109,14 +60,9 @@
         "enabled": true
       },
       "zero_optimization": {
-        "stage": 2,
-        "allgather_partitions": true,
-        "overlap_comm": true,
-        "reduce_scatter": true,
-        "reduce_bucket_size": 15000000,
-        "allgather_bucket_size": 15000000,
-        "contiguous_gradients" : true,
-        "cpu_offload": true
+       "stage": 3,
+       "overlap_comm": true,
+       "cpu_offload": true
       },
      "fp32_allreduce": false
     },
@@ -129,9 +75,7 @@
   "distributed": {
     "cuda_devices": [
       0,
-      1,
-      2,
-      3
+      1
     ]
   }
 }

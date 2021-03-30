@@ -2,73 +2,61 @@
   "dataset_reader": {
     "type": "interleaving-batch",
     "batch_size": 32,
-    "lazy": true,
     "readers": {
       "moviecorpus-interleaved": {
         "type": "moviecorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
+        "encoder_max_length": 384
       },
       "bookcorpus-interleaved": {
         "type": "bookcorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
+        "encoder_max_length": 384
       },
       "gutenberg-interleaved": {
         "type": "gutenberg-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
+        "encoder_max_length": 384
       }
     }
   },
   "validation_dataset_reader": {
     "type": "interleaving-batch",
     "batch_size": 32,
-    "lazy": true,
     "readers": {
       "moviecorpus-interleaved": {
         "type": "moviecorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
+        "encoder_max_length": 384
       },
       "bookcorpus-interleaved": {
         "type": "bookcorpus-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
+        "encoder_max_length": 384
       },
       "gutenberg-interleaved": {
         "type": "gutenberg-interleaved",
         "generator_model_name": "facebook/bart-base",
         "generator_max_length": 128,
-        "encoder_max_length": 384,
-        "manual_shards": 1,
-        "lazy": true
+        "encoder_max_length": 384
       }
     }
   },
-  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/train\",  \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/train\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/validation\"}",
+  "train_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/train\",  \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/train\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/train\"}",
   "validation_data_path": "{\"moviecorpus-interleaved\": \"moviecorpus_context_12_label_12_step_12/validation\", \"bookcorpus-interleaved\": \"bookcorpus_context_12_label_12_step_12/validation\", \"gutenberg-interleaved\": \"gutenberg_context_12_label_12_step_12/validation\"}",
   "data_loader": {
     "batch_size": 8,
+    "max_instances_in_memory": 128,
     "batches_per_epoch": 25000
   },
   "validation_data_loader": {
     "batch_size": 8,
+    "max_instances_in_memory": 128,
     "batches_per_epoch": 2000
   },
   "model": {
