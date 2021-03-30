@@ -64,8 +64,11 @@ class RagFragmentsGenerationPredictor(Predictor):
         results = {}
 
         if "title" in inputs:
-            results["title"] = inputs
-        #results["inputs"] = inputs
+            results["title"] = inputs["title"]
+
+        if "id" in inputs:
+            results["id"] = inputs["id"]
+
         results["passages"] = []
 
         passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,

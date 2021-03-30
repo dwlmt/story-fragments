@@ -60,7 +60,10 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
         results = {}
 
         if "title" in inputs:
-            results["title"] = inputs
+            results["title"] = inputs["title"]
+
+        if "id" in inputs:
+            results["id"] = inputs["id"]
 
         #results["inputs"] = inputs
         results["passages"] = []

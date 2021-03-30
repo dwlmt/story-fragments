@@ -62,7 +62,7 @@ class RagFragmentsBarthesPredictor(Predictor):
         encoder_max_length = int(os.getenv("ENCODER_MAX_LENGTH", default=512))
         add_special_tokens = parse_bool(os.getenv("ADD_SPECIAL_TOKENS", default="True"))
 
-        self._retrieval_metrics = parse_bool(os.getenv("RETREIEVAL_METRICS", default="True"))
+        self._retrieval_metrics = parse_bool(os.getenv("RETRIEVAL_METRICS", default="True"))
         self._random_retrieval_metrics = parse_bool(os.getenv("RANDOM_RETRIEVAL_METRICS", default="False"))
         self._swap_metrics = parse_bool(os.getenv("SWAP_METRICS", default="True"))
 
@@ -109,17 +109,25 @@ class RagFragmentsBarthesPredictor(Predictor):
         results = {}
 
         if "title" in inputs:
-            results["title"] = inputs
+            results["title"] = inputs["title"]
+
+        if "id" in inputs:
+            results["id"] = inputs["id"]
+
+        if "sentences" in inputs:
+            results["input_sentences"] = inputs["sentences"]
 
         results["passages"] = []
 
         cycles = self._abridge_cycles if self._abridge else 1
         for i in range(cycles):
 
+            prefill = True if self._sentence_step_size < self._sentence_batch_size else False
+
             passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
                                          sentence_label_size=self._sentence_label_size,
                                          sentence_step_size=self._sentence_step_size, max_passages=self._max_passages,
-                                         prefill=True if self._sentence_step_size < self._sentence_batch_size else False)
+                                         prefill=prefill)
 
             if self._abridge and i == 0:
                pass#results["orig_passages"] = copy.deepcopy(passages)
@@ -131,8 +139,9 @@ class RagFragmentsBarthesPredictor(Predictor):
                 p["metrics"]["sentiment"] = 0.0
                 p["metrics"]["sentiment_abs"] = 0.0
                 p["metrics"]["avg_log_likelihood"] = 0.0
+                p["metrics"]["avg_log_likelihood_impact_adj"] = 0.0
 
-                field_list = ["perplexity", "avg_log_likelihood"]
+                field_list = ["perplexity", "avg_log_likelihood","sentiment_abs"]
 
                 if self._retrieval_metrics:
                     for k in field_list:
@@ -150,8 +159,6 @@ class RagFragmentsBarthesPredictor(Predictor):
                     salience_dict[f"{k}_salience"] = 0.0
 
                 p["metrics"] = {**p["metrics"], **salience_dict}
-
-
 
                 if self._calc_vector_metrics:
                     for field in embeddings_fields:
@@ -258,7 +265,7 @@ class RagFragmentsBarthesPredictor(Predictor):
 
                 if self._keep_embeddings:
 
-                    p["answer_embedding"] = context_embeddings.tolist()
+                    p["answer_embedding"] = context_embeddings[0].tolist()
 
 
                 print(f"ADD TO MEMORY: {ids}, {context_embeddings.shape}")
@@ -333,7 +340,7 @@ class RagFragmentsBarthesPredictor(Predictor):
         return passages_swapped
 
     def _calc_salience(self, results, passages_offset):
-        salience_field_dict = {"avg_log_likelihood": False, "perplexity": False}
+        salience_field_dict = {"avg_log_likelihood": False, "perplexity": False, "avg_log_likelihood_impact_adj": False}
         for field in embeddings_fields:
             f_dict = {f"{field}_l1_dist": True,
                       f"{field}_l2_dist": True,
@@ -382,13 +389,14 @@ class RagFragmentsBarthesPredictor(Predictor):
         peak_field_dict = {"avg_log_likelihood": False,
                            "perplexity": False,
                            "sentiment": False,
-                           "sentiment_abs": False}
+                           "sentiment_abs": False,
+                           "avg_log_likelihood_impact_adj": False,}
         for field in embeddings_fields:
-            f_dict = {f"{field}_l1_dist": True,
-                      f"{field}_l2_dist": True,
+            f_dict = {f"{field}_l1_dist": False,#True,
+                      f"{field}_l2_dist": False,#True,
                       f"{field}_cosine_sim": False,
                       f"{field}_dot_product": False,
-                      f"{field}_wasserstein_dist": True,
+                      f"{field}_wasserstein_dist": False, #True,
                       f"{field}_l1_dist_salience": False,
                       f"{field}_l2_dist_salience": False,
                       f"{field}_cosine_sim_salience": False,
@@ -459,6 +467,18 @@ class RagFragmentsBarthesPredictor(Predictor):
             if "text_offset" in p:
                 p["text"] = p["text_offset"]
                 del p["text_offset"]
+
+        prefill = True if self._sentence_step_size < self._sentence_batch_size else False
+
+        # If a placeholder was used then remove the placeholder and reset the sequence so the first sentence
+        # is true first sentence.
+        if prefill:
+            results["passages"] = results["passages"][1:]
+            for i, p in enumerate(results["passages"]):
+                p["seq_num"] = i
+
+
+
 
     def calc_diff_metrics(self, p):
         kb_metrics_dict = {}
@@ -563,6 +583,7 @@ class RagFragmentsBarthesPredictor(Predictor):
         example["metrics"]["avg_log_likelihood"] = output[f"avg_log_likelihood"].item()
         example["metrics"]["sentiment"] = output["sentiment"]
         example["metrics"]["sentiment_abs"] = abs(output["sentiment"])
+        example["metrics"]["avg_log_likelihood_impact_adj"] = output[f"avg_log_likelihood"].item() * (1.0 - abs(output["sentiment"]) + 1.0)
 
         if self._keep_embeddings:
             if "retrieved_doc_embeddings" in output:
@@ -590,7 +611,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                     if "text" in doc:
                         del doc["text"]
 
-            example["retreived_docs"] = retrieved_docs
+            example["retrieved_docs"] = retrieved_docs
             # example["predicted_text_greedy"] = output["predicted_text"]
 
 
