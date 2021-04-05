@@ -3,6 +3,7 @@
 import collections
 import glob
 import os
+import re
 import textwrap
 from pathlib import Path
 from typing import List, OrderedDict
@@ -10,6 +11,8 @@ from typing import List, OrderedDict
 import fire
 import jsonlines
 import xml
+
+import more_itertools
 
 
 class ConvertPropLearner(object):
@@ -102,8 +105,33 @@ class ConvertPropLearner(object):
 
                     print("Functions: ", elem.tag, elem.attrib, elem.text)
 
+                    if elem.text is None:
+                        continue
+
+                    description = elem.text.split("|")
+
+
                     offset = elem.attrib.get("off")
 
+                    statement_list = [re.split("[:,~]", item) for item in description[1:]]
+
+                    print(f"Statement list: {statement_list}")
+
+                    propp_functions = [[int(i) for i in statement[1:]] if statement[0] == "ACTUAL" else [] for
+                                        statement in statement_list]
+
+                    propp_functions = more_itertools.flatten(propp_functions)
+
+                    print(f"Functions: {propp_functions}")
+
+                    for f in propp_functions:
+                        if f in token_to_sentence_dict:
+                            sentence = int(token_to_sentence_dict[f])
+                            print(f"Salient sentence: {sentence}")
+                            sentences_dict[sentence]["salient"] = True
+                            sentences_dict[sentence]["salience_score"] = 1.0
+
+                    '''
                     if offset is not None:
 
                         for j in range(int(elem.attrib.get("off")),
@@ -115,7 +143,8 @@ class ConvertPropLearner(object):
                                 sentences_dict[sentence]["salient"] = True
                                 sentences_dict[sentence]["salience_score"] = 1.0
 
-                            break # Always break after the first offset.
+                            #break # Always break after the first offset.
+                    '''
 
                 text_id = "edu.mit.semantics.semroles"
                 events = tree.find(f"//rep[@id = '{text_id}']")
