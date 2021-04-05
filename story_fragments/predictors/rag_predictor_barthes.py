@@ -68,6 +68,8 @@ class RagFragmentsBarthesPredictor(Predictor):
 
         self._calc_vector_metrics = parse_bool(os.getenv("CALC_VECTOR_METRICS", default="True"))
 
+        self._clear_memory_between_instances = parse_bool(os.getenv("CLEAR_MEMORY_BETWEEN_INSTANCES", default="True"))
+
         self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=5))
         self._peak_prominence = float(os.getenv("PEAK_PROMINENCE", default=0.10))
         self._peak_threshold = float(os.getenv("PEAK_THRESHOLD", default=0.01))
@@ -181,7 +183,8 @@ class RagFragmentsBarthesPredictor(Predictor):
 
             self._calc_peaks(results)
 
-            self._model.clear_memory()
+            if self._clear_memory_between_instances:
+                self._model.clear_memory()
 
             self.cleanup_output(results)
 
