@@ -68,6 +68,7 @@ class RagFragmentsBarthesPredictor(Predictor):
 
         self._calc_vector_metrics = parse_bool(os.getenv("CALC_VECTOR_METRICS", default="True"))
 
+
         self._clear_memory_between_instances = parse_bool(os.getenv("CLEAR_MEMORY_BETWEEN_INSTANCES", default="True"))
 
         self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=5))
