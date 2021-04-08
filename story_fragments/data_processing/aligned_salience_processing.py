@@ -15,9 +15,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 class AlignedEventProcessing(object):
 
     def __init__(self):
-        self.predictor = Predictor.from_path(
+        self.srl_predictor = Predictor.from_path(
             "https://storage.googleapis.com/allennlp-public-models/structured-prediction-srl-bert.2020.12.15.tar.gz",
             cuda_device=0)
+
+        '''
+        self.coref_predictor = Predictor.from_path(
+            "https://storage.googleapis.com/allennlp-public-models/coref-spanbert-large-2020.02.27.tar.gz",
+            cuda_device=0)
+        '''
 
         self.sentence_transformer = SentenceTransformer('stsb-roberta-large').cuda()
 
@@ -28,19 +34,19 @@ class AlignedEventProcessing(object):
                tag_batch_size: int = 20,
                vector_batch_size: int = 5,
                match_type: str = "whole",
-               min_threshold: float = 0.25,
+               min_threshold: float = 0.3,
                more_k_diff_similarity: float = 0.05,
                nearest_k: int = 5,
                min_sentence_len_chars: int = 20,
-               plus_minus_percentile: float = 12.5,
-               neural_coref: bool = True):
+               plus_minus_percentile: float = 7.5):
 
         #output_dir = os.path.dirname(output_file)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         Path(f"{output_dir}/books/").mkdir(parents=True, exist_ok=True)
 
-        #import spacy
-        #nlp = spacy.load("en_core_web_md")
+        #import neuralcoref
+        #coref = neuralcoref.NeuralCoref(nlp.vocab)
+        #nlp.add_pipe(coref, name='neuralcoref')
 
         objects_to_write = []
 
@@ -55,7 +61,23 @@ class AlignedEventProcessing(object):
                         vectors_dict = {}
 
                         for c, chapter in enumerate(obj["chapters"]):
+
                             summary_sentences = chapter["summary"]["sentences"]
+
+                            summary_sentences = self.sentence_to_dict(summary_sentences)
+
+
+                            '''
+                            coreference_summary_text = nlp(" ".join(s["text"] for s in summary_sentences))
+                            print(coreference_summary_text._.coref_resolved)
+
+                            for sent_dict, sent in zip(summary_sentences, nlp(coreference_summary_text._.coref_resolved).sents):
+                                sent_text = sent.text.strip()
+                                sent_dict["coref_text"] = sent_text
+                                print(sent_dict)
+                            '''
+                         
+
                             if match_type != "whole":
                                 summary_sentences = self.extract_srl(summary_sentences, srl_batch_size)
                                 summary_sentences = self.extract_tags_text(summary_sentences, tag_batch_size)
@@ -63,6 +85,24 @@ class AlignedEventProcessing(object):
                             chapter["summary"]["sentences"] = summary_sentences
 
                             full_text_sentences = chapter["full_text"]["sentences"]
+
+                            full_text_sentences = self.sentence_to_dict(full_text_sentences)
+
+                            '''
+                            coreference_full_text = self.coref_predictor.coref_resolved(
+                                " ".join(s["text"] for s in full_text_sentences))
+                            print(coreference_full_text)
+
+                            coreference_full_text = nlp(" ".join(s["text"] for s in full_text_sentences))
+                            print(coreference_full_text._.coref_resolved)
+                            
+
+                            for sent_dict, sent in zip(coreference_full_text ,
+                                                       nlp(coreference_full_text._.coref_resolved).sents):
+                                sent_text = sent.text.strip()
+                                sent_dict["coref_text"] = sent_text
+                            '''
+
                             if match_type != "whole":
                                 full_text_sentences = self.extract_srl(full_text_sentences, srl_batch_size)
                                 full_text_sentences = self.extract_tags_text(full_text_sentences, tag_batch_size)
@@ -161,6 +201,14 @@ class AlignedEventProcessing(object):
 
                     writer.write(obj)
 
+    def sentence_to_dict(self, sentences):
+        if not isinstance(sentences[0], dict):
+            full_text_sentences_dict = []
+            for i, s in enumerate(sentences):
+                full_text_sentences_dict.append({"seq_num": i, "text": s})
+            sentences = full_text_sentences_dict
+        return sentences
+
     def fill_embeddings_dict(self, sentences, vectors_dict, vector_batch_size, match_type):
         for sent_batch in more_itertools.chunked(sentences, n=vector_batch_size):
             embeddings_text = []
@@ -220,7 +268,7 @@ class AlignedEventProcessing(object):
         for sent_batch in more_itertools.chunked(summary_sentences, n=srl_batch_size):
             batch_json = [{"sentence": " ".join(s["text"].split()[:100])} for s in sent_batch]
             #print(batch_json)
-            sents_srl = self.predictor.predict_batch_json(batch_json)
+            sents_srl = self.srl_predictor.predict_batch_json(batch_json)
 
             for sent, srl in zip(sent_batch, sents_srl):
                 sent = {**sent, **srl}

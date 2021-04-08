@@ -15,9 +15,12 @@ class EvaluateSalience(object):
     ''' Evaluate salience scores.
     '''
 
-    def evaluate(self, src_json: List[str], output_dir: str, top_k_list = [1,5,10]):
+    def evaluate(self, src_json: List[str], output_dir: str, top_k_list=[1, 5, 10, 20, "n"]):
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+        from datasets import load_metric
+        rouge = load_metric("rouge")
 
         rank_fields = ["random", "first", "last"]
 
@@ -56,16 +59,112 @@ class EvaluateSalience(object):
 
                             salience_binary_list = [bool(s["salient"]) for s in obj['input_sentences'] if
                                                     "salient" in s]
+                            total_salient_sentences = len([s for s in salience_binary_list if s == True])
+
+                            gold_salient_text = " ".join([s["text"] for s in obj['input_sentences'] if
+                                                          "salient" in s and s["salient"] == True])
 
                             if len(salience_binary_list) > 0:
 
-                                print(f"Salient sentences {salience_binary_list}")
-
                                 for field in rank_fields:
 
+                                    field_cleaned = field.replace("_rank", "")
+
+                                    num_salient_examples = total_salient_sentences
+
+                                    # ROUGE and other text based evaluations
+
+                                    if field == "random":
+
+                                        # Randomly set number of examples.
+                                        salient_predictions = [False] * len(salience_binary_list)
+
+                                        indices = [i[0] for i in enumerate(salience_binary_list)]
+                                        shuffle(indices)
+
+                                        for i in indices[:num_salient_examples]:
+                                            salient_predictions[i] = True
+
+                                        salient_text = " ".join(
+                                            [s["text"] for s, pred in zip(obj["passages"], salient_predictions) if
+                                             pred == True])
+
+                                    elif field == "first":
+
+                                        # Randomly set number of examples.
+                                        salient_predictions = ([True] * num_salient_examples) + (
+                                                [False] * (len(salience_binary_list) - num_salient_examples))
+
+                                        salient_text = " ".join(
+                                            [s["text"] for s, pred in zip(obj["passages"], salient_predictions) if
+                                             pred == True])
+
+
+                                    elif field == "last":
+
+                                        salient_predictions = (
+                                                                      [False] * (len(
+                                                                  salience_binary_list) - num_salient_examples)) + (
+                                                                      [True] * num_salient_examples)
+
+                                        salient_text = " ".join(
+                                            [s["text"] for s, pred in zip(obj["passages"], salient_predictions) if
+                                             pred == True])
+
+
+                                    else:
+
+                                        salient_predictions = []
+
+                                        # print(f"Counts: {len(salience_binary_list)}, {len(obj['passages'])}")
+                                        for p in obj["passages"]:
+
+                                            peak_data = p["peaks"]
+
+                                            if field in peak_data:
+
+                                                rank = peak_data[field]
+
+                                                if rank < num_salient_examples:
+                                                    salient_predictions.append(True)
+                                                else:
+                                                    salient_predictions.append(False)
+
+                                        salient_text = " ".join(
+                                            [s["text"] for s, pred in zip(obj["passages"], salient_predictions) if
+                                             pred == True])
+
+                                    def compute_rouge_metrics(label_str, pred_str):
+
+                                        # Compute the metric.
+                                        rouge_results = rouge.compute(
+                                            predictions=[pred_str],
+                                            references=[label_str],
+                                            rouge_types=["rouge2", "rougeL"],
+                                            use_agregator=True,
+                                            use_stemmer=False,
+                                        )
+                                        return rouge_results['rouge2'].mid.fmeasure, rouge_results[
+                                            'rougeL'].mid.fmeasure
+
+                                    rouge2, rougeL = compute_rouge_metrics(gold_salient_text, salient_text)
+
+                                    story_evaluation.append(
+                                        {"field": field_cleaned, "title": title, "metric": "rouge2",
+                                         "value": rouge2})
+                                    story_evaluation.append(
+                                        {"field": field_cleaned, "title": title, "metric": "rougeL",
+                                         "value": rougeL})
+
+                                    # print(f"Salient sentences {salience_binary_list}")
+
+                                    # Top K Evaluation
                                     for top_k in top_k_list:
 
-                                        num_salient_examples = top_k  # len([s for s in salience_binary_list if s == True])
+                                        if top_k != "n":
+                                            num_salient_examples = top_k  #
+                                        else:
+                                            num_salient_examples = total_salient_sentences
 
                                         if field == "random":
 
@@ -82,14 +181,14 @@ class EvaluateSalience(object):
 
                                             # Randomly set number of examples.
                                             salient_predictions = ([True] * num_salient_examples) + (
-                                                        [False] * (len(salience_binary_list) - num_salient_examples))
+                                                    [False] * (len(salience_binary_list) - num_salient_examples))
 
                                         elif field == "last":
 
                                             salient_predictions = (
                                                                           [False] * (len(
                                                                       salience_binary_list) - num_salient_examples)) + (
-                                                                              [True] * num_salient_examples)
+                                                                          [True] * num_salient_examples)
 
                                         else:
 
@@ -109,7 +208,6 @@ class EvaluateSalience(object):
                                                     else:
                                                         salient_predictions.append(False)
 
-
                                         # Some metrics will have no predictions for the final sentence and so just set to false.
                                         if len(salient_predictions) < len(salience_binary_list):
                                             salience_binary_list = salience_binary_list[: len(salient_predictions)]
@@ -120,15 +218,18 @@ class EvaluateSalience(object):
                                         prec, recall, f_score, support = sklearn.metrics.precision_recall_fscore_support(
                                             salience_binary_list, salient_predictions, average="binary")
 
-                                        field_cleaned = field.replace("_rank", "")
                                         story_evaluation.append(
-                                            {"field": field_cleaned, "title": title, "metric": f"precision_{top_k}", "value": prec})
+                                            {"field": field_cleaned, "title": title, "metric": f"precision_{top_k}",
+                                             "value": prec})
                                         story_evaluation.append(
-                                            {"field": field_cleaned, "title": title, "metric": f"recall_{top_k}", "value": recall})
+                                            {"field": field_cleaned, "title": title, "metric": f"recall_{top_k}",
+                                             "value": recall})
 
                                         story_evaluation.append(
-                                            {"field": field_cleaned, "title": title, "metric": f"f_score_{top_k}", "value": f_score})
+                                            {"field": field_cleaned, "title": title, "metric": f"f_score_{top_k}",
+                                             "value": f_score})
 
+                                    # Map ranking evaluation.
                                     if field == "random":
 
                                         indices = [i[0] for i in enumerate(salience_binary_list)]
@@ -163,13 +264,14 @@ class EvaluateSalience(object):
                                         salient_predictions_scores = salient_predictions_scores[
                                                                      :len(salience_binary_list)]
 
-
                                     map = sklearn.metrics.average_precision_score(salience_binary_list,
                                                                                   salient_predictions_scores)
                                     print(f"MAP: {map}")
 
                                     story_evaluation.append(
                                         {"field": field_cleaned, "title": title, "metric": "map", "value": map})
+
+                                    # Calculate ROUGE score.
 
                         story_evaluation_df = pandas.DataFrame(story_evaluation)
                         story_evaluation_df.to_csv(f"{output_dir}/{title}_salience_eval.csv")
@@ -180,7 +282,7 @@ class EvaluateSalience(object):
         all_stats_df = all_evaluation_df.groupby(["field", "metric"]).describe()
         all_stats_df.reset_index()
 
-        #all_stats_df = pandas.DataFrame(group.describe().rename(columns={'name': name}).squeeze()
+        # all_stats_df = pandas.DataFrame(group.describe().rename(columns={'name': name}).squeeze()
         #                   for name, group in all_evaluation_df.groupby(['field','metric']))
         all_stats_df.to_csv(f"{output_dir}/salience_eval.csv")
 

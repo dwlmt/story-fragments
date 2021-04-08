@@ -96,14 +96,14 @@ class AlignSummariesAndText(object):
         for k, v in data_dict.items():
             for chapter in v:
                 text = chapter["text"]
-                doc = self.nlp(text)
-                #sentences_split = text_to_sentences(text).split('\n')
+                #doc = self.nlp(text)
+                sentences_split = text_to_sentences(text).split('\n')
 
                 sentences = []
 
                 i = 0
-                for sent in doc.sents:
-                    text = sent.text.strip()
+                for sent in sentences_split:
+                    text = sent.strip()
 
                     if len(text) > 0:
 
