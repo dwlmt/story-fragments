@@ -67,9 +67,7 @@ class ClusterSaliencePredictor(Predictor):
 
         self._cluster_ratio = float(os.getenv("CLUSTER_RATIO", default=0.1))
         self._min_clusters = int(os.getenv("MIN_POINTS_PER_CLUSTER", default=5))
-
         self._cluster_cosine = parse_bool(os.getenv("CLUSTER_COSINE", default="True"))
-
         self._vector_batch_size = int(os.getenv("VECTOR_BATCH_SIZE", default=20))
 
         sentence_transformer_model = str(os.getenv("SENTENCE_TRANSFORMER_MODEL", default='stsb-roberta-large'))
@@ -114,46 +112,7 @@ class ClusterSaliencePredictor(Predictor):
 
             results["passages"] = []
 
-            embeddings_list = []
-            for sent_batch in more_itertools.chunked(passages, n=self._vector_batch_size):
-                embeddings_text = []
-                for sent in sent_batch:
-
-                    embeddings_text.append(sent["text"])
-
-                embeddings = self.sentence_transformer.encode(embeddings_text)
-                embeddings_list.append(embeddings)
-
-            all_embeddings = numpy.concatenate(embeddings_list, axis=0)
-            print(f"All Embeddings: {all_embeddings.shape}")
-
-            num_clusters = max(self._min_clusters, int(len(passages) * self._cluster_ratio))
-            kmeans_clusterer = KMeans(n_clusters=num_clusters)
-
-            def distance_from_centroid(assigned_clusters, embeddings, centroids, dist_metric=euclidean):
-                distances = []
-                for a, e in zip(assigned_clusters, embeddings):
-                    a_centroid = centroids[a]
-                    distances.append(dist_metric(e, a_centroid))
-                return distances
-
-            if self._cluster_cosine:
-                from sklearn import preprocessing  # to normalise existing X
-                X = preprocessing.normalize(all_embeddings)
-            else:
-                X = all_embeddings
-
-            assigned_clusters = kmeans_clusterer.fit_predict(X)
-            centroids = kmeans_clusterer.cluster_centers_
-            print(f"Assigned Clusters: {assigned_clusters}")
-            print(f"Centroids: {centroids}")
-
-            cluster_distances = distance_from_centroid(assigned_clusters, X, centroids)
-            cluster_distances_flipped = [-d for d in cluster_distances]
-
-            for p, d, c in zip(passages, cluster_distances_flipped, assigned_clusters):
-                p["metrics"]["cluster"] = c.item()
-                p["metrics"]["cluster_score"] = d
+            self.cluster_metrics(passages)
 
             results["passages"] = passages
 
@@ -165,6 +124,42 @@ class ClusterSaliencePredictor(Predictor):
             inputs = self.abridge_if_required(inputs, results)
 
         return results
+
+    def cluster_metrics(self, passages):
+        embeddings_list = []
+        for sent_batch in more_itertools.chunked(passages, n=self._vector_batch_size):
+            embeddings_text = []
+            for sent in sent_batch:
+                embeddings_text.append(sent["text"])
+
+            embeddings = self.sentence_transformer.encode(embeddings_text)
+            embeddings_list.append(embeddings)
+        all_embeddings = numpy.concatenate(embeddings_list, axis=0)
+        # print(f"All Embeddings: {all_embeddings.shape}")
+        num_clusters = max(self._min_clusters, int(len(passages) * self._cluster_ratio))
+        kmeans_clusterer = KMeans(n_clusters=num_clusters)
+
+        def distance_from_centroid(assigned_clusters, embeddings, centroids, dist_metric=euclidean):
+            distances = []
+            for a, e in zip(assigned_clusters, embeddings):
+                a_centroid = centroids[a]
+                distances.append(dist_metric(e, a_centroid))
+            return distances
+
+        if self._cluster_cosine:
+            from sklearn import preprocessing  # to normalise existing X
+            X = preprocessing.normalize(all_embeddings)
+        else:
+            X = all_embeddings
+        assigned_clusters = kmeans_clusterer.fit_predict(X)
+        centroids = kmeans_clusterer.cluster_centers_
+        # print(f"Assigned Clusters: {assigned_clusters}")
+        # print(f"Centroids: {centroids}")
+        cluster_distances = distance_from_centroid(assigned_clusters, X, centroids)
+        cluster_distances_flipped = [-d for d in cluster_distances]
+        for p, d, c in zip(passages, cluster_distances_flipped, assigned_clusters):
+            p["metrics"]["cluster"] = c.item()
+            p["metrics"]["cluster_score"] = d
 
     def abridge_if_required(self, inputs, results):
         if self._abridge:
