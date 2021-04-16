@@ -4,13 +4,11 @@ from pathlib import Path
 from typing import List
 
 import fire
-import jsonlines
 import jsonlines as jsonlines
 import numpy
 import pandas
 import plotly
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 from sklearn.preprocessing import normalize
 
 from story_fragments.data_processing.plotly_utils import text_table, create_peak_text_and_metadata
@@ -47,7 +45,11 @@ class PlotStories(object):
              output_dir: str,
              plot_fields: List[str] = ["perplexity",
                                        "avg_log_likelihood",
-                                       "avg_log_likelihood_impact_adj",
+                                       "avg_log_likelihood_salience_impact_adj",
+                                       "cluster_score",
+                                       "avg_log_likelihood_salience_cluster",
+                                       "avg_log_likelihood_salience_cluster_imp_adj",
+                                       "sentiment_abs",
                                        "sentiment",
                                        "generator_enc_embedding_l2_dist",
                                        "generator_enc_embedding_cosine_dist",
@@ -58,9 +60,22 @@ class PlotStories(object):
                                        "retrieved_embedding_l2_dist",
                                        "retrieved_doc_embedding_cosine_dist",
                                        "retrieved_doc_embedding_wasserstein_dist"],
-             full_text_fields = ["avg_log_likelihood_salience","avg_log_likelihood","perplexity"],
+             full_text_fields=["avg_log_likelihood_salience",
+                                   "sentiment_abs", "cluster_score",
+                                   "avg_log_likelihood_salience_impact_adj",
+                                   "avg_log_likelihood_salience_cluster_imp_adj",
+                                   "avg_log_likelihood_salience_cluster", "perplexity"],
+             plot_together_fields=["avg_log_likelihood_salience",
+                                   "sentiment_abs", "cluster_score",
+                                   "avg_log_likelihood_salience_impact_adj",
+                                   "avg_log_likelihood_salience_cluster_imp_adj",
+                                   "avg_log_likelihood_salience_cluster", "perplexity"],
+             plot_together_names=["Salience", "Imp", "Cluster", "Salience Imp",
+                                  "Salience Cluster Imp",
+                                  "Salience Cluster", "Perplexity"]
+
              ):
-        #print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
+        # print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -69,15 +84,16 @@ class PlotStories(object):
 
         all_stats = []
 
-        i = 0
         for json_file in src_json:
             print(f"Process: {json_file}")
+
+            i = 0
 
             with jsonlines.open(json_file) as reader:
                 for obj in reader:
 
                     if "title" in obj:
-                        title = obj["title"].replace(".txt","")
+                        title = f'{obj["title"].replace(".txt", "")}_{i}'
                     else:
                         title = f"{i}"
 
@@ -91,96 +107,63 @@ class PlotStories(object):
 
                         passages_df = pandas.DataFrame(passages_flattened)
 
-                        passages_df["hover_text"] = passages_df["seq_num"].astype(str) #+ ": " + passages_df["text"]
+                        passages_df["hover_text"] = passages_df["seq_num"].astype(str)  # + ": " + passages_df["text"]
 
                         passages_df.fillna(0)
 
                         fig = text_table(passages_df)
-                        plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/text.html", include_plotlyjs='cdn', include_mathjax='cdn', auto_open=False)
+                        plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/text.html", include_plotlyjs='cdn',
+                                             include_mathjax='cdn', auto_open=False)
 
-                        #print(f"{passages_df.seq_num}, {passages_df.text}")
+                        # print(f"{passages_df.seq_num}, {passages_df.text}")
 
-                        for field in plot_fields:
+                        if len(plot_together_fields) > 0:
 
-                            field_type_list = ["","_no_ret","_no_ret_diff","_swapped","_swapped_diff"]
-                            field_type_list += [f"{f}_salience" for f in field_type_list]
-                            sub_fields = [f"{field}{ext}" for ext in field_type_list]
+                            fig = go.Figure()
 
-                            sub_fields = [sub for sub in sub_fields if f"metrics.{sub}" in passages_df.columns]
-
-                            '''
-                            if "sentiment" not in field:
-                                fig = make_subplots(rows=3, shared_xaxes=True)
-                            else:
-                                fig = make_subplots(rows=1)
-                            '''
-                            #fig = go.Figure()
-
-                            for j, subfield in enumerate(sub_fields):
-
-                                single_fig = go.Figure()
-
-                                if "sentiment" in subfield:
-                                    row = 1
-                                elif "diff" not in subfield and "salience" not in subfield:
-                                    row = 2
-                                elif  "salience" not in subfield:
-                                    row = 3
-                                else:
-                                    row = 1
+                            for j, (field, name) in enumerate(zip(plot_together_fields, plot_together_names)):
 
                                 x = passages_df["seq_num"]
-                                y = passages_df[f"metrics.{subfield}"].replace(numpy.nan, 0) #numpy.squeeze(normalize(numpy.array(passages_df[f"metrics.{field}"]).reshape(1, -1)))
 
-                                print(f"Field: {subfield}, {x}, {y}")
+                                from sklearn.preprocessing import StandardScaler
+                                scaler = StandardScaler(with_mean=True)
+                                y = numpy.squeeze(
+                                    scaler.fit_transform(passages_df[f"metrics.{field}"].to_numpy().reshape(-1, 1)), axis=1).tolist()
+                                #y = numpy.squeeze(
+                                #    normalize(numpy.array(passages_df[f"metrics.{field}"]).reshape(1, -1)))
 
-                                if subfield in full_text_fields:
+                                print(f"Field: {field}, {x}, {y}")
+
+                                if field in full_text_fields:
 
                                     text_values = ["<br>".join(textwrap.wrap(t)) for t in passages_df['text'].tolist()]
 
                                     hover_text = [f"<b>{id}</b> <br><br>{t}" for id, t in
-                                                 zip(passages_df['seq_num'], text_values)]
+                                                  zip(passages_df['seq_num'], text_values)]
 
                                 else:
                                     hover_text = passages_df["hover_text"]
 
-
-                                #print(f"XXX: {x}, YYY: {y}")
-                                '''
                                 fig.add_trace(go.Scatter(x=x,
                                                          y=y,
                                                          mode='lines+markers',
                                                          line=dict(color=colors[(j - 1) % len(colors)]),
-                                                         name=f'{subfield}',
-                                                         line_shape='spline',
-                                                         hovertext=hover_text),
-                                                         col=1,row=row)
-                                '''
-                                single_fig.add_trace(go.Scatter(x=x,
-                                                         y=y,
-                                                         mode='lines+markers',
-                                                         line=dict(color=colors[(j - 1) % len(colors)]),
-                                                         name=f'{subfield}',
+                                                         name=f'{name}',
                                                          line_shape='spline',
                                                          hovertext=hover_text))
 
-                                for x_item, y_item in zip(x, y):
-                                    all_stats.append({"field": subfield, "value": y_item})
-
-
-                                if f"peaks.{subfield}_peak" in passages_df.columns:
-                                    peak_indices = [p["peaks"][f"{subfield}_peak"] for p in passages]
+                                if f"peaks.{field}_peak" in passages_df.columns:
+                                    peak_indices = [p["peaks"][f"{field}_peak"] for p in passages]
 
                                     if any(peak_indices):
-
                                         peak_x = [x_item for x_item, peak in zip(x, peak_indices) if peak == True]
                                         peak_y = [y_item for y_item, peak in zip(y, peak_indices) if peak == True]
 
-                                        peak_properties = [p["peaks"][f"{subfield}_peak_properties"] for p, peak in zip(passages, peak_indices) if peak == True]
+                                        peak_properties = [p["peaks"][f"{field}_peak_properties"] for p, peak in
+                                                           zip(passages, peak_indices) if peak == True]
 
                                         peak_metadata = create_peak_text_and_metadata(peak_properties)
 
-                                        '''
                                         fig.add_trace(go.Scatter(
                                             x=peak_x,
                                             y=peak_y,
@@ -190,10 +173,70 @@ class PlotStories(object):
                                                 size=12,
                                                 color=colors[(j - 1) % len(colors)],
                                             ),
-                                            name=f'{subfield} - peak',
+                                            name=f'{name} - Peak',
                                             text=peak_metadata,
-                                        ),col=1,row=row)
-                                        '''
+                                        ))
+
+                                fig.update_layout(template="plotly_white")
+
+                                plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/all.html",
+                                                     include_plotlyjs='cdn', include_mathjax='cdn', auto_open=False)
+
+                                #fig.update_layout(showlegend=False)
+
+                                plotly.io.write_image(fig=fig, file=f"{output_dir}/{title}/all.svg")
+
+                        for field in plot_fields:
+
+                            field_type_list = ["", "_no_ret", "_no_ret_diff", "_swapped", "_swapped_diff"]
+                            field_type_list += [f"{f}_salience" for f in field_type_list]
+                            sub_fields = [f"{field}{ext}" for ext in field_type_list]
+
+                            sub_fields = [sub for sub in sub_fields if f"metrics.{sub}" in passages_df.columns]
+
+                            for j, subfield in enumerate(sub_fields):
+
+                                single_fig = go.Figure()
+
+                                x = passages_df["seq_num"]
+                                y = passages_df[f"metrics.{subfield}"].replace(numpy.nan,
+                                                                               0)  # numpy.squeeze(normalize(numpy.array(passages_df[f"metrics.{field}"]).reshape(1, -1)))
+
+                                print(f"Field: {subfield}, {x}, {y}")
+
+                                if subfield in full_text_fields:
+
+                                    text_values = ["<br>".join(textwrap.wrap(t)) for t in passages_df['text'].tolist()]
+
+                                    hover_text = [f"<b>{id}</b> <br><br>{t}" for id, t in
+                                                  zip(passages_df['seq_num'], text_values)]
+
+                                else:
+                                    hover_text = passages_df["hover_text"]
+
+                                single_fig.add_trace(go.Scatter(x=x,
+                                                                y=y,
+                                                                mode='lines+markers',
+                                                                line=dict(color=colors[(j - 1) % len(colors)]),
+                                                                name=f'{subfield}',
+                                                                line_shape='spline',
+                                                                hovertext=hover_text))
+
+                                for x_item, y_item in zip(x, y):
+                                    all_stats.append({"field": subfield, "value": y_item})
+
+                                if f"peaks.{subfield}_peak" in passages_df.columns:
+                                    peak_indices = [p["peaks"][f"{subfield}_peak"] for p in passages]
+
+                                    if any(peak_indices):
+                                        peak_x = [x_item for x_item, peak in zip(x, peak_indices) if peak == True]
+                                        peak_y = [y_item for y_item, peak in zip(y, peak_indices) if peak == True]
+
+                                        peak_properties = [p["peaks"][f"{subfield}_peak_properties"] for p, peak in
+                                                           zip(passages, peak_indices) if peak == True]
+
+                                        peak_metadata = create_peak_text_and_metadata(peak_properties)
+
                                         single_fig.add_trace(go.Scatter(
                                             x=peak_x,
                                             y=peak_y,
@@ -206,41 +249,20 @@ class PlotStories(object):
                                             name=f'{subfield} - peak',
                                             text=peak_metadata))
 
-                                '''
-                                single_fig.update_layout(
-                                    xaxis=dict(
-                                        rangeslider=dict(
-                                            visible=True
-                                        )
-                                    )
-                                )'''
-
                                 single_fig.update_layout(template="plotly_white")
 
                                 plotly.io.write_html(fig=single_fig, file=f"{output_dir}/{title}/{subfield}.html",
                                                      include_plotlyjs='cdn',
                                                      include_mathjax='cdn', auto_open=False)
 
-
-                            '''
-                            fig.update_layout(
-                                xaxis=dict(
-                                    rangeslider=dict(
-                                        visible=True
-                                    )
-                                )
-                            )'''
-
-                            #fig.update_layout(template="plotly_white")
-
-                            #plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/{field}_all.html", include_plotlyjs='cdn',
-                            #                     include_mathjax='cdn', auto_open=False)
+                                plotly.io.write_image(fig=fig, file=f"{output_dir}/{title}/{subfield}.svg")
 
                     i += 1
 
         all_stats_df = pandas.DataFrame(all_stats)
         all_stats_df_agg = all_stats_df.groupby(["field"]).describe()
         all_stats_df_agg.to_csv(f"{output_dir}/metric_stats.csv")
-        
+
+
 if __name__ == '__main__':
     fire.Fire(PlotStories)

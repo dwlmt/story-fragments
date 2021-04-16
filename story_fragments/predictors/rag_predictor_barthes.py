@@ -85,6 +85,9 @@ class RagFragmentsBarthesPredictor(Predictor):
         self._cluster_cosine = parse_bool(os.getenv("CLUSTER_COSINE", default="True"))
         self._vector_batch_size = int(os.getenv("VECTOR_BATCH_SIZE", default=20))
 
+        self.sentiment_negative_mixture_weighting = float(os.getenv("SENTIMENT_NEGATIVE_MIXTURE_WEIGHTING", default=2.0))
+        self.salience_mixture_weighting = float(os.getenv("SALIENCE_MIXTURE_WEIGHTING", default=2.0))
+
         self._add_retrieved_docs = parse_bool(os.getenv("ADD_RETRIEVED_DOCS", default="False"))
 
         sentence_transformer_model = str(os.getenv("SENTENCE_TRANSFORMER_MODEL", default='stsb-roberta-large'))
@@ -115,6 +118,8 @@ class RagFragmentsBarthesPredictor(Predictor):
 
         # Hacky flag to stop adding duplicates to memory.
         os.environ['DONT_ADD_TO_MEMORY'] = 'True'
+
+        self._previous_text = None
 
     def predict(self, sentences: List[str] = None, text: str = None, passage: str = None) -> JsonDict:
 
@@ -198,8 +203,14 @@ class RagFragmentsBarthesPredictor(Predictor):
                 self.cluster_metrics(results)
 
             for p in passages:
-                p["metrics"]["avg_log_likelihood_salience_impact_adj"] = p["metrics"][f"avg_log_likelihood_salience"] * (
-                        abs(p["metrics"]["sentiment"]) + 1.0)
+
+                sentiment = p["metrics"]["sentiment"]
+                if sentiment < 0:
+                    sentiment *= self.sentiment_negative_mixture_weighting
+
+                sentiment_adj = (abs(sentiment + 1.0))
+
+                p["metrics"]["avg_log_likelihood_salience_impact_adj"] = p["metrics"][f"avg_log_likelihood_salience"] * sentiment_adj
 
             self._calc_peaks(results)
 
@@ -207,6 +218,9 @@ class RagFragmentsBarthesPredictor(Predictor):
                 self._model.clear_memory()
 
             self.cleanup_output(results)
+
+            if not self._clear_memory_between_instances:
+                self._previous_text = [s["text"] for s in results["passages"]]
 
             inputs = self.abridge_if_required(inputs, results)
 
@@ -374,12 +388,19 @@ class RagFragmentsBarthesPredictor(Predictor):
             p["metrics"]["cluster_score"] = d
 
             # "avg_log_likelihood""sentiment_abs"
-            sentiment_adj = (abs(p["metrics"]["sentiment"]) + 1.0)
+
+
+            sentiment = p["metrics"]["sentiment"]
+            if sentiment < 0:
+                sentiment *= self.sentiment_negative_mixture_weighting
+
+            sentiment_adj = (abs(sentiment + 1.0))
+
             p["metrics"]["cluster_score_imp_adj"] = d * sentiment_adj
 
             #print(p["metrics"])
-            p["metrics"]["avg_log_likelihood_salience_cluster"] = p["metrics"]["cluster_score"] + p["metrics"]["avg_log_likelihood_salience"]
-            p["metrics"]["avg_log_likelihood_salience_cluster_imp_adj"] = (p["metrics"]["cluster_score"] + p["metrics"]["avg_log_likelihood_salience"]) * sentiment_adj
+            p["metrics"]["avg_log_likelihood_salience_cluster"] = p["metrics"]["cluster_score"] + (self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"])
+            p["metrics"]["avg_log_likelihood_salience_cluster_imp_adj"] = ((p["metrics"]["cluster_score"] +  (self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"]))) * sentiment_adj
        
 
     def passage_offsets(self, passages):

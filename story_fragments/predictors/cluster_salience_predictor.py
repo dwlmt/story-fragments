@@ -73,6 +73,8 @@ class ClusterSaliencePredictor(Predictor):
         sentence_transformer_model = str(os.getenv("SENTENCE_TRANSFORMER_MODEL", default='stsb-roberta-large'))
         self.sentence_transformer = SentenceTransformer(sentence_transformer_model).cuda()
 
+        self._previous_text = None
+
     def predict(self, sentences: List[str] = None, text: str = None, passage: str = None) -> JsonDict:
 
         return self.predict_json({"sentence": sentences, "text": text, "passage": passage})
@@ -99,7 +101,7 @@ class ClusterSaliencePredictor(Predictor):
             passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
                                          sentence_label_size=self._sentence_label_size,
                                          sentence_step_size=self._sentence_step_size, max_passages=self._max_passages,
-                                         prefill=prefill)
+                                         prefill=prefill, previous_text=self._previous_text)
 
             if self._abridge and i == 0:
                pass#results["orig_passages"] = copy.deepcopy(passages)
@@ -117,7 +119,6 @@ class ClusterSaliencePredictor(Predictor):
             results["passages"] = passages
 
             self._calc_peaks(results)
-
 
             self.cleanup_output(results)
 
