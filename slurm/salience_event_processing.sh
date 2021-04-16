@@ -4,7 +4,7 @@
 #SBATCH -N 1	  # nodes requested
 #SBATCH -n 1	  # tasks requested
 #SBATCH --gres=gpu:1
-#SBATCH --mem=32g  # Memory
+#SBATCH --mem=64g  # Memory
 #SBATCH --cpus-per-task=12  # number of cpus to use - there are 32 on each node.
 
 echo "============"
@@ -45,8 +45,8 @@ done
 echo ${SCRATCH_HOME}
 
 export EXP_ROOT="${CLUSTER_HOME}/git/story-fragments"
-export SERIAL_DIR="${SCRATCH_HOME}/${EXP_ID}"
 export EXP_ID="${EXP_NAME}_${SLURM_JOB_ID}_${CURRENT_TIME}"
+export SERIAL_DIR="${SCRATCH_HOME}/${EXP_ID}/"
 
 
 # Ensure the scratch home exists and CD to the experiment root level.
@@ -56,7 +56,8 @@ cd /home/s1569885/git/story-fragments/story_fragments/data_processing
 
 python aligned_salience_processing.py events \
 --src-json ${BATCH_FILE_PATH} \
---output-dir ${SERIAL_DIR} --match-type whole
+--output-dir ${SERIAL_DIR} --match-type whole \
+--more-k-diff-similarity 0.05 --plus-minus-percentile 7.5 --min-threshold 0.30 --nearest-k 3
 
 echo "============"
 echo "Salience Extraction Task finished"
