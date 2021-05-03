@@ -1,5 +1,6 @@
 ''' Script for cluster analysis for story vectors.
 '''
+import gzip
 from pathlib import Path
 from random import shuffle
 from typing import List
@@ -10,14 +11,22 @@ import pandas
 import sklearn
 from sklearn.metrics.pairwise import pairwise_distances
 
+from story_fragments.data_processing.utils import build_salience_override_dict
+
 
 class EvaluateSalience(object):
     ''' Evaluate salience scores.
     '''
 
-    def evaluate(self, src_json: List[str], output_dir: str, top_k_list=[1, 5, 10, 20, "n"]):
+    def evaluate(self, src_json: List[str], output_dir: str, top_k_list=[1, 5, 10, 20, "n"],
+                 salience_score_filter: float = 0.325,
+                 salience_override_json: str = None):
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+        salience_dict = build_salience_override_dict(salience_override_json)
+
+        print(f"Salience dict: {salience_dict}")
 
         from datasets import load_metric
         rouge = load_metric("rouge")
@@ -34,6 +43,18 @@ class EvaluateSalience(object):
         for json_file in src_json:
             # print(f"Process: {json_file}")
 
+            if "gz" in json_file:
+
+                def read_jsonl_gz(filename):
+                    data = []
+                    with gzip.open(filename, 'rb') as fp:
+                        j_reader = jsonlines.Reader(fp)
+
+                        for obj in j_reader:
+                            data.append(obj)
+
+                    return data
+
             with jsonlines.open(json_file) as reader:
                 for obj in reader:
 
@@ -46,19 +67,39 @@ class EvaluateSalience(object):
 
                         story_evaluation = []
 
-                        if len(rank_fields) == 3:
-                            peaks_data = obj["passages"][0]["peaks"]
-                            for k in peaks_data.keys():
-                                if "rank" in k:
-                                    rank_fields.append(k)
+                        peaks_data = obj["passages"][0]["peaks"]
+                        for k in peaks_data.keys():
+                            if "rank" in k and "likelihood_salience" in k:
+                                rank_fields.append(k)
 
                         ##print(f"RANK FIELDS: {rank_fields}")
 
                         if "input_sentences" in obj:
                             # print(f"Input sentences: {obj['input_sentences']}")
 
-                            salience_binary_list = [bool(s["salient"]) for s in obj['input_sentences'] if
-                                                    "salient" in s]
+                            salience_binary_list = []
+                            if len(salience_dict) == 0:
+                                for s in obj['input_sentences']:
+                                    if "salient" in s:
+                                        if bool(s["salient"]) == True and float(
+                                                s["salience_score"]) > salience_score_filter:
+                                            salience_binary_list.append(True)
+                                        else:
+                                            salience_binary_list.append(False)
+                            else:
+                                title = obj["title"]
+                                for sentence in obj["input_sentences"]:
+                                    if sentence["text"] in salience_dict[title]:
+                                        salience_sentence_dict =  salience_dict[title][sentence["text"]]
+
+                                        if float(salience_sentence_dict["similarity"]) > salience_score_filter:
+                                            salience_binary_list.append(True)
+                                        else:
+                                            salience_binary_list.append(False)
+
+                                    else:
+                                        salience_binary_list.append(False)
+
                             total_salient_sentences = len([s for s in salience_binary_list if s == True])
 
                             gold_salient_text = " ".join([s["text"] for s in obj['input_sentences'] if
@@ -285,7 +326,6 @@ class EvaluateSalience(object):
         # all_stats_df = pandas.DataFrame(group.describe().rename(columns={'name': name}).squeeze()
         #                   for name, group in all_evaluation_df.groupby(['field','metric']))
         all_stats_df.to_csv(f"{output_dir}/salience_eval.csv")
-
 
 if __name__ == '__main__':
     fire.Fire(EvaluateSalience)

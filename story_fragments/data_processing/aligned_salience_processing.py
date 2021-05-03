@@ -37,6 +37,7 @@ class AlignedEventProcessing(object):
                min_threshold: float = 0.3,
                more_k_diff_similarity: float = 0.05,
                nearest_k: int = 5,
+               earliest_k: int = 3,
                min_sentence_len_chars: int = 20,
                plus_minus_percentile: float = 7.5):
 
@@ -151,6 +152,9 @@ class AlignedEventProcessing(object):
                                     continue
                                     
                                 top_k_indices = numpy.argpartition(-sim_tensor_slice, range(min(nearest_k, index_range )))[:nearest_k]
+
+                                if len(top_k_indices) > earliest_k:
+                                    top_k_indices = top_k_indices[numpy.argpartition(top_k_indices, earliest_k)[:earliest_k]]
 
                                 #num_aligned = 0
 

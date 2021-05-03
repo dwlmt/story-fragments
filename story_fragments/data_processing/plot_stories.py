@@ -9,9 +9,9 @@ import numpy
 import pandas
 import plotly
 import plotly.graph_objects as go
-from sklearn.preprocessing import normalize
 
 from story_fragments.data_processing.plotly_utils import text_table, create_peak_text_and_metadata
+from story_fragments.data_processing.utils import build_salience_override_dict
 
 colors = ['rgb(31, 119, 180)', 'rgb(255, 127, 14)',
           'rgb(44, 160, 44)', 'rgb(214, 39, 40)',
@@ -19,7 +19,6 @@ colors = ['rgb(31, 119, 180)', 'rgb(255, 127, 14)',
           'rgb(227, 119, 194)', 'rgb(127, 127, 127)',
           'rgb(188, 189, 34)', 'rgb(23, 190, 207)']
 
-colors = list(reversed(colors))
 
 ''' Script and function for plotting story predictions output. 
 '''
@@ -43,6 +42,7 @@ class PlotStories(object):
     def plot(self,
              src_json: List[str],
              output_dir: str,
+             salience_override_json: str = None,
              plot_fields: List[str] = ["perplexity",
                                        "avg_log_likelihood",
                                        "avg_log_likelihood_salience_impact_adj",
@@ -59,25 +59,41 @@ class PlotStories(object):
                                        "generator_dec_embedding_wasserstein_dist"
                                        "retrieved_embedding_l2_dist",
                                        "retrieved_doc_embedding_cosine_dist",
-                                       "retrieved_doc_embedding_wasserstein_dist"],
+                                       "retrieved_doc_embedding_wasserstein_dist"
+                                       ],
              full_text_fields=["avg_log_likelihood_salience",
-                                   "sentiment_abs", "cluster_score",
                                    "avg_log_likelihood_salience_impact_adj",
+                                   "cluster_score",
+                                   "avg_log_likelihood_salience_cluster",
                                    "avg_log_likelihood_salience_cluster_imp_adj",
-                                   "avg_log_likelihood_salience_cluster", "perplexity"],
+                                   "avg_log_likelihood_no_ret_diff",
+                                   "avg_log_likelihood_no_ret_salience",
+                                   "avg_log_likelihood_swapped_salience",
+                                   "sentiment_abs"],
              plot_together_fields=["avg_log_likelihood_salience",
-                                   "sentiment_abs", "cluster_score",
                                    "avg_log_likelihood_salience_impact_adj",
+                                   "cluster_score",
+                                   "avg_log_likelihood_salience_cluster",
                                    "avg_log_likelihood_salience_cluster_imp_adj",
-                                   "avg_log_likelihood_salience_cluster", "perplexity"],
-             plot_together_names=["Salience", "Imp", "Cluster", "Salience Imp",
-                                  "Salience Cluster Imp",
-                                  "Salience Cluster", "Perplexity"]
+                                   "avg_log_likelihood_no_ret_diff",
+                                   "avg_log_likelihood_no_ret_salience",
+                                   "avg_log_likelihood_swapped_salience",
+                                   "sentiment_abs"],
+             plot_together_names=["Like-Sal",
+                                  "Like-Imp-Sal",
+                                  "Clus-Sal",
+                                  "Like-Clus-Sal",
+                                  "Like-Clus-Imp-Sal",
+                                  "Know-Diff-Sal",
+                                  "No-Know-Sal",
+                                  "Swap-Sal",
+                                  "Imp"]
 
              ):
-        # print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+        salience_dict = build_salience_override_dict(salience_override_json)
 
         if isinstance(src_json, str):
             src_json = [src_json]
@@ -87,9 +103,10 @@ class PlotStories(object):
         for json_file in src_json:
             print(f"Process: {json_file}")
 
-            i = 0
-
             with jsonlines.open(json_file) as reader:
+
+                i = 0
+
                 for obj in reader:
 
                     if "title" in obj:
@@ -126,65 +143,106 @@ class PlotStories(object):
                                 x = passages_df["seq_num"]
 
                                 from sklearn.preprocessing import StandardScaler
-                                scaler = StandardScaler(with_mean=True)
-                                y = numpy.squeeze(
-                                    scaler.fit_transform(passages_df[f"metrics.{field}"].to_numpy().reshape(-1, 1)), axis=1).tolist()
-                                #y = numpy.squeeze(
-                                #    normalize(numpy.array(passages_df[f"metrics.{field}"]).reshape(1, -1)))
+                                if f"metrics.{field}" in passages_df.columns:
 
-                                print(f"Field: {field}, {x}, {y}")
+                                    scaler = StandardScaler(with_mean=True)
+                                    y = numpy.squeeze(
+                                        scaler.fit_transform(passages_df[f"metrics.{field}"].to_numpy().reshape(-1, 1)),
+                                        axis=1).tolist()
+                                    # y = numpy.squeeze(
+                                    #    normalize(numpy.array(passages_df[f"metrics.{field}"]).reshape(1, -1)))
 
-                                if field in full_text_fields:
+                                    print(f"Field: {field}, {x}, {y}")
 
-                                    text_values = ["<br>".join(textwrap.wrap(t)) for t in passages_df['text'].tolist()]
+                                    if field in full_text_fields:
 
-                                    hover_text = [f"<b>{id}</b> <br><br>{t}" for id, t in
-                                                  zip(passages_df['seq_num'], text_values)]
+                                        text_values = ["<br>".join(textwrap.wrap(t)) for t in
+                                                       passages_df['text'].tolist()]
 
-                                else:
-                                    hover_text = passages_df["hover_text"]
+                                        hover_text = [f"<b>{id}</b> <br><br>{t}" for id, t in
+                                                      zip(passages_df['seq_num'], text_values)]
 
-                                fig.add_trace(go.Scatter(x=x,
-                                                         y=y,
-                                                         mode='lines+markers',
-                                                         line=dict(color=colors[(j - 1) % len(colors)]),
-                                                         name=f'{name}',
-                                                         line_shape='spline',
-                                                         hovertext=hover_text))
+                                    else:
+                                        hover_text = passages_df["hover_text"]
 
-                                if f"peaks.{field}_peak" in passages_df.columns:
-                                    peak_indices = [p["peaks"][f"{field}_peak"] for p in passages]
+                                    fig.add_trace(go.Scatter(x=x,
+                                                             y=y,
+                                                             mode='lines+markers',
+                                                             line=dict(color=colors[(j - 1) % len(colors)]),
+                                                             name=f'{name}',
+                                                             line_shape='spline',
+                                                             hovertext=hover_text))
 
-                                    if any(peak_indices):
-                                        peak_x = [x_item for x_item, peak in zip(x, peak_indices) if peak == True]
-                                        peak_y = [y_item for y_item, peak in zip(y, peak_indices) if peak == True]
+                                    if f"peaks.{field}_peak" in passages_df.columns:
+                                        peak_indices = [p["peaks"][f"{field}_peak"] for p in passages]
 
-                                        peak_properties = [p["peaks"][f"{field}_peak_properties"] for p, peak in
-                                                           zip(passages, peak_indices) if peak == True]
+                                        if any(peak_indices):
+                                            peak_x = [x_item for x_item, peak in zip(x, peak_indices) if peak == True]
+                                            peak_y = [y_item for y_item, peak in zip(y, peak_indices) if peak == True]
 
-                                        peak_metadata = create_peak_text_and_metadata(peak_properties)
+                                            peak_properties = [p["peaks"][f"{field}_peak_properties"] for p, peak in
+                                                               zip(passages, peak_indices) if peak == True]
 
-                                        fig.add_trace(go.Scatter(
-                                            x=peak_x,
-                                            y=peak_y,
-                                            mode='markers',
-                                            marker=dict(
-                                                symbol='star-triangle-up',
-                                                size=12,
-                                                color=colors[(j - 1) % len(colors)],
-                                            ),
-                                            name=f'{name} - Peak',
-                                            text=peak_metadata,
-                                        ))
+                                            peak_metadata = create_peak_text_and_metadata(peak_properties)
 
-                                fig.update_layout(template="plotly_white")
+                                            fig.add_trace(go.Scatter(
+                                                x=peak_x,
+                                                y=peak_y,
+                                                mode='markers',
+                                                marker=dict(
+                                                    symbol='star-triangle-up',
+                                                    size=12,
+                                                    color=colors[(j - 1) % len(colors)],
+                                                ),
+                                                name=f'{name} - Peak',
+                                                text=peak_metadata,
+                                            ))
 
-                                plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/all.html",
-                                                     include_plotlyjs='cdn', include_mathjax='cdn', auto_open=False)
+                            if len(salience_dict) > 0 and field:
+                                sentences = passages_df['text'].tolist()
 
-                                #fig.update_layout(showlegend=False)
+                                salient_points = []
+                                salient_text_labels = []
+                                for sal_idx, s in enumerate(sentences):
+                                    orig_title = f'{obj["title"].replace(".txt", "")}'
+                                    if s in salience_dict[orig_title]:
+                                        salient_points.append(sal_idx)
+                                        salient_text_labels.append(
+                                            f"{'<br>'.join(textwrap.wrap(salience_dict[orig_title][s]['summary_text']))}"
+                                            f"<br><br><b>Alignment Similarity: {salience_dict[orig_title][s]['similarity']}</b><br><br>"
+                                            f"{'<br>'.join(textwrap.wrap(s))}")
 
-                                plotly.io.write_image(fig=fig, file=f"{output_dir}/{title}/all.svg")
+                                y = [0.0] * len(salient_points)
+
+                                trace = go.Scatter(
+                                    x=salient_points,
+                                    y=y,
+                                    mode='markers',
+                                    marker=dict(
+                                        color="gold",
+                                        symbol='star',
+                                        size=12,
+                                    ),
+                                    name=f'Shmoop Label',
+                                    hovertext=salient_text_labels,
+                                    
+
+                                )
+                            fig.add_trace(trace)
+
+                            fig.update_layout(template="plotly_white")
+
+                            fig.update_layout(
+                                xaxis_title="Sentence",
+                                yaxis_title="Salience",
+                            )
+
+                            plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/all.html",
+                                                 include_plotlyjs='cdn', include_mathjax='cdn', auto_open=False)
+
+                            # fig.update_layout(showlegend=False)
+
+                            plotly.io.write_image(fig=fig, file=f"{output_dir}/{title}/all.svg")
 
                         for field in plot_fields:
 
@@ -249,15 +307,51 @@ class PlotStories(object):
                                             name=f'{subfield} - peak',
                                             text=peak_metadata))
 
+                                if len(salience_dict) > 0:
+                                    sentences = passages_df['text'].tolist()
+
+                                    salient_points = []
+                                    salient_text_labels = []
+                                    for sal_idx, s in enumerate(sentences):
+                                        orig_title = f'{obj["title"].replace(".txt", "")}'
+                                        if s in salience_dict[orig_title]:
+                                            salient_points.append(sal_idx)
+                                            salient_text_labels.append(
+                                                f"{'<br>'.join(textwrap.wrap(salience_dict[orig_title][s]['summary_text']))}"
+                                                f"<br><br><b>Alignment Similarity: {salience_dict[orig_title][s]['similarity']}</b><br><br>"
+                                                f"{'<br>'.join(textwrap.wrap(s))}")
+
+                                    y = [0.0] * len(salient_points)
+
+                                    trace = go.Scatter(
+                                        x=salient_points,
+                                        y=y,
+                                        mode='markers',
+                                        marker=dict(
+                                            color="gold",
+                                            symbol='star',
+                                            size=11,
+                                        ),
+                                        name=f'Shmoop Label',
+                                        hovertext=salient_text_labels,
+
+                                    )
+                                    single_fig.add_trace(trace)
+
                                 single_fig.update_layout(template="plotly_white")
+
+                                single_fig.update_layout(
+                                    xaxis_title="Sentence",
+                                    yaxis_title="Salience",
+                                )
 
                                 plotly.io.write_html(fig=single_fig, file=f"{output_dir}/{title}/{subfield}.html",
                                                      include_plotlyjs='cdn',
                                                      include_mathjax='cdn', auto_open=False)
 
-                                plotly.io.write_image(fig=fig, file=f"{output_dir}/{title}/{subfield}.svg")
+                                plotly.io.write_image(fig=single_fig, file=f"{output_dir}/{title}/{subfield}.svg")
 
-                    i += 1
+                        i += 1
 
         all_stats_df = pandas.DataFrame(all_stats)
         all_stats_df_agg = all_stats_df.groupby(["field"]).describe()
