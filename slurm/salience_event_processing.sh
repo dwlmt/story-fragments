@@ -57,7 +57,7 @@ cd /home/s1569885/git/story-fragments/story_fragments/data_processing
 python aligned_salience_processing.py events \
 --src-json ${BATCH_FILE_PATH} \
 --output-dir ${SERIAL_DIR} --match-type whole \
---more-k-diff-similarity 0.05 --plus-minus-percentile 7.5 --min-threshold 0.30 --nearest-k 3
+--more-k-diff-similarity 0.05 --plus-minus-percentile 7.25 --min-threshold 0.30 --earliest-k 3 --nearest-k 5
 
 echo "============"
 echo "Salience Extraction Task finished"
