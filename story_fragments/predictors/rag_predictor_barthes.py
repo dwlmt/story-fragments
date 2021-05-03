@@ -66,13 +66,12 @@ class RagFragmentsBarthesPredictor(Predictor):
         add_special_tokens = parse_bool(os.getenv("ADD_SPECIAL_TOKENS", default="True"))
 
         self._retrieval_metrics = parse_bool(os.getenv("RETRIEVAL_METRICS", default="True"))
-        self._random_retrieval_metrics = parse_bool(os.getenv("RANDOM_RETRIEVAL_METRICS", default="False"))
+        self._random_retrieval = parse_bool(os.getenv("RANDOM_RETRIEVAL", default="False"))
         self._swap_metrics = parse_bool(os.getenv("SWAP_METRICS", default="True"))
 
         self._calc_vector_metrics = parse_bool(os.getenv("CALC_VECTOR_METRICS", default="True"))
 
-
-        self._clear_memory_between_instances = parse_bool(os.getenv("CLEAR_MEMORY_BETWEEN_INSTANCES", default="True"))
+        self._clear_memory_between_instances = parse_bool(os.getenv("CLEAR_MEMORY_BETWEEN_INSTANCES", default="False"))
 
         self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=5))
         self._peak_prominence = float(os.getenv("PEAK_PROMINENCE", default=0.10))
@@ -262,10 +261,8 @@ class RagFragmentsBarthesPredictor(Predictor):
                 if self._retrieval_metrics:
                     p_copy = copy.deepcopy(p)
 
-                    if not self._random_retrieval_metrics:
+                    if not self._random_retrieval:
                         p_copy["ndocs"] = 0
-                    else:
-                        p_copy["ndocs"] = -self._model.config.combined_n_docs
 
                     no_kb_results = self._model_output(p_copy)
                     if no_kb_results is not None:
@@ -283,10 +280,10 @@ class RagFragmentsBarthesPredictor(Predictor):
                 if self._retrieval_metrics:
                     p_copy = copy.deepcopy(p_off)
 
-                    if not self._random_retrieval_metrics:
+                    if not self._random_retrieval:
                         p_copy["ndocs"] = 0
                     else:
-                        p_copy["ndocs"] = -self._model.config.combined_n_docs
+                        p_copy["ndocs"] = self._model.config.combined_n_docs
 
                     no_kb_results = self._model_output(p_copy)
                     if no_kb_results is not None:
@@ -361,47 +358,47 @@ class RagFragmentsBarthesPredictor(Predictor):
         all_embeddings = numpy.concatenate(embeddings_list, axis=0)
         # print(f"All Embeddings: {all_embeddings.shape}")
         num_clusters = max(self._min_clusters, int(len(passages) * self._cluster_ratio))
-        kmeans_clusterer = KMeans(n_clusters=num_clusters)
+        if len(passages) > num_clusters:
+            kmeans_clusterer = KMeans(n_clusters=num_clusters)
 
-        def distance_from_centroid(assigned_clusters, embeddings, centroids, dist_metric=euclidean):
-            distances = []
-            for a, e in zip(assigned_clusters, embeddings):
-                a_centroid = centroids[a]
-                distances.append(dist_metric(e, a_centroid))
-            return distances
+            def distance_from_centroid(assigned_clusters, embeddings, centroids, dist_metric=euclidean):
+                distances = []
+                for a, e in zip(assigned_clusters, embeddings):
+                    a_centroid = centroids[a]
+                    distances.append(dist_metric(e, a_centroid))
+                return distances
 
-        if self._cluster_cosine:
-            from sklearn import preprocessing  # to normalise existing X
-            X = preprocessing.normalize(all_embeddings)
-        else:
-            X = all_embeddings
-        assigned_clusters = kmeans_clusterer.fit_predict(X)
-        centroids = kmeans_clusterer.cluster_centers_
-        # print(f"Assigned Clusters: {assigned_clusters}")
-        # print(f"Centroids: {centroids}")
-        cluster_distances = distance_from_centroid(assigned_clusters, X, centroids)
-        cluster_distances_flipped = [-d for d in cluster_distances]
-        
-        
-        for p, d, c in zip(passages, cluster_distances_flipped, assigned_clusters):
-            p["metrics"]["cluster"] = c.item()
-            p["metrics"]["cluster_score"] = d
+            if self._cluster_cosine:
+                from sklearn import preprocessing  # to normalise existing X
+                X = preprocessing.normalize(all_embeddings)
+            else:
+                X = all_embeddings
+            assigned_clusters = kmeans_clusterer.fit_predict(X)
+            centroids = kmeans_clusterer.cluster_centers_
+            # print(f"Assigned Clusters: {assigned_clusters}")
+            # print(f"Centroids: {centroids}")
+            cluster_distances = distance_from_centroid(assigned_clusters, X, centroids)
+            cluster_distances_flipped = [-d for d in cluster_distances]
+            
+            for p, d, c in zip(passages, cluster_distances_flipped, assigned_clusters):
+                p["metrics"]["cluster"] = c.item()
+                p["metrics"]["cluster_score"] = d
 
-            # "avg_log_likelihood""sentiment_abs"
+                # "avg_log_likelihood""sentiment_abs"
 
 
-            sentiment = p["metrics"]["sentiment"]
-            if sentiment < 0:
-                sentiment *= self.sentiment_negative_mixture_weighting
+                sentiment = p["metrics"]["sentiment"]
+                if sentiment < 0:
+                    sentiment *= self.sentiment_negative_mixture_weighting
 
-            sentiment_adj = (abs(sentiment + 1.0))
+                sentiment_adj = (abs(sentiment + 1.0))
 
-            p["metrics"]["cluster_score_imp_adj"] = d * sentiment_adj
+                p["metrics"]["cluster_score_imp_adj"] = d * sentiment_adj
 
-            #print(p["metrics"])
-            p["metrics"]["avg_log_likelihood_salience_cluster"] = p["metrics"]["cluster_score"] + (self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"])
-            p["metrics"]["avg_log_likelihood_salience_cluster_imp_adj"] = ((p["metrics"]["cluster_score"] +  (self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"]))) * sentiment_adj
-       
+                #print(p["metrics"])
+                p["metrics"]["avg_log_likelihood_salience_cluster"] = p["metrics"]["cluster_score"] + (self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"])
+                p["metrics"]["avg_log_likelihood_salience_cluster_imp_adj"] = ((p["metrics"]["cluster_score"] +  (self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"]))) * sentiment_adj
+
 
     def passage_offsets(self, passages):
         passages_offset = []
