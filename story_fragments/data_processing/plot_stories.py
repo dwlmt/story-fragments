@@ -9,6 +9,8 @@ import numpy
 import pandas
 import plotly
 import plotly.graph_objects as go
+import scipy
+from scipy.stats import kendalltau, spearmanr
 
 from story_fragments.data_processing.plotly_utils import text_table, create_peak_text_and_metadata
 from story_fragments.data_processing.utils import build_salience_override_dict
@@ -136,6 +138,8 @@ class PlotStories(object):
 
                         if len(plot_together_fields) > 0:
 
+                            y_values_dict = collections.OrderedDict()
+
                             fig = go.Figure()
 
                             for j, (field, name) in enumerate(zip(plot_together_fields, plot_together_names)):
@@ -144,6 +148,8 @@ class PlotStories(object):
 
                                 from sklearn.preprocessing import StandardScaler
                                 if f"metrics.{field}" in passages_df.columns:
+
+                                    y_values_dict[field] = passages_df[f"metrics.{field}"].to_numpy().tolist()
 
                                     scaler = StandardScaler(with_mean=True)
                                     y = numpy.squeeze(
@@ -243,6 +249,39 @@ class PlotStories(object):
                             # fig.update_layout(showlegend=False)
 
                             plotly.io.write_image(fig=fig, file=f"{output_dir}/{title}/all.svg")
+
+
+                            # Extract heatmaps.
+                            correlation_list = []
+                            z = []
+                            keys = y_values_dict.keys()
+                            for k1 in keys:
+                                z_list_nested = []
+                                for k2 in keys:
+
+                                    kendall, kendall_p = kendalltau(y_values_dict[k1], y_values_dict[k2])
+                                    spearman, spearman_p = spearmanr(y_values_dict[k1], y_values_dict[k2])
+                                    correlation_list.append({"metric_1": k1, "metric_2": k2, "kendall": kendall,
+                                                             "kendall_p": kendall,
+                                                             "spearman": spearman, "spearman_p": spearman_p})
+
+                                    z_list_nested.append(spearman)
+
+                                z.append(z_list_nested)
+
+                            story_correlation_df = pandas.DataFrame(correlation_list)
+                            story_correlation_df.to_csv(f"{output_dir}/{title}/correlation.csv")
+
+                            z_text = numpy.around(z, decimals=3)
+                            x = plot_together_names
+                            y = plot_together_names
+
+                            print(x,y,z,z_text)
+                            import plotly.figure_factory as ff
+                            fig = ff.create_annotated_heatmap(z, x=x, y=y, annotation_text=z_text)
+                            plotly.io.write_html(fig=fig, file=f"{output_dir}/{title}/all_correlation_kendall_heatmap.html",
+                                                 include_plotlyjs='cdn', include_mathjax='cdn', auto_open=False)
+
 
                         for field in plot_fields:
 
@@ -348,6 +387,8 @@ class PlotStories(object):
                                 plotly.io.write_html(fig=single_fig, file=f"{output_dir}/{title}/{subfield}.html",
                                                      include_plotlyjs='cdn',
                                                      include_mathjax='cdn', auto_open=False)
+
+                                single_fig.update_layout(showlegend=False)
 
                                 plotly.io.write_image(fig=single_fig, file=f"{output_dir}/{title}/{subfield}.svg")
 
