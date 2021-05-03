@@ -6,6 +6,7 @@ from typing import List, Tuple, Any
 import faiss
 import more_itertools
 import numpy as np
+import torch
 
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,9 @@ class OrderedDictCache:
         for item in self.cache.items():
             yield item
 
+import os
+def parse_bool(b):
+    return b == "True" or b == "TRUE" or b == "true" or b == "1"
 
 class MemoryIndex:
     def __init__(self, embedding_dim=768, capacity: int = 9900, buffer=100, lru: bool = True, **kwargs):
@@ -81,6 +85,8 @@ class MemoryIndex:
             self.remove_ids(doc_ids_arr)
 
         self.cache = OrderedDictCache(capacity=capacity, buffer=buffer, lru=lru, callback=remove_from_cache)
+
+        self._random_retrieval = parse_bool(os.getenv("RANDOM_RETRIEVAL", default="False"))
 
     def init_index(self):
         """ Initialise the Faiss index.
@@ -127,11 +133,6 @@ class MemoryIndex:
 
         doc_id = int(doc_id) - self.id_offset
 
-
-        if doc_id < 0:
-            cache_size = len(self.cache)
-            doc_id
-
         doc_dict = copy.deepcopy(self.cache.get(int(doc_id)))
         if doc_dict is None:
             doc_dict = {"id": f"{doc_id}", "text": " ", "title": " ",
@@ -160,11 +161,10 @@ class MemoryIndex:
         """
         assert len(question_hidden_states.shape) == 2
 
-        if n_docs >= 0:
-            distances, indices, = self.index.search(np.float32(question_hidden_states), n_docs)
-        else:
-            distances, indices, = self.random(np.float32(question_hidden_states), n_docs)
+        if self._random_retrieval:
+            question_hidden_states= np.random.randn(*question_hidden_states.shape)
 
+        distances, indices, = self.index.search(np.float32(question_hidden_states), n_docs)
 
         embeddings_list = []
         for ind in indices:

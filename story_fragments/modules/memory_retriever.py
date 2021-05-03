@@ -26,8 +26,9 @@ from transformers import BatchEncoding, DPRContextEncoderTokenizerFast
 from transformers.models.rag.retrieval_rag import RagRetriever, LegacyIndex, LEGACY_INDEX_PATH, CustomHFIndex, \
     CanonicalHFIndex, HFIndexBase
 from transformers.utils import logging
+import os
 
-from story_fragments.modules.memory_cache_index import MemoryIndex
+from story_fragments.modules.memory_cache_index import MemoryIndex, parse_bool
 
 logger = logging.get_logger(__name__)
 
@@ -47,12 +48,18 @@ class CustomMemoryHFIndex(CustomHFIndex):
     """
 
     def __init__(self, vector_size: int, dataset, index_path=None):
+        self._random_retrieval = parse_bool(os.getenv("RANDOM_RETRIEVAL", default="False"))
+
         super().__init__(vector_size, dataset, index_path=index_path)
 
     def get_doc_dicts(self, doc_ids: np.ndarray) -> List[dict]:
         return [self.dataset[doc_ids[i].tolist()] for i in range(doc_ids.shape[0])]
 
     def get_top_docs(self, question_hidden_states: np.ndarray, n_docs: int = 5) -> Tuple[np.ndarray, np.ndarray]:
+
+        if self._random_retrieval:
+            question_hidden_states = np.float32(np.random.randn(*question_hidden_states.shape))
+
         distances, ids = self.dataset.search_batch("embeddings", question_hidden_states, n_docs)
         docs = [self.dataset[[i for i in indices if i >= 0]] for indices in ids]
         vectors = [doc["embeddings"] for doc in docs]
@@ -62,13 +69,7 @@ class CustomMemoryHFIndex(CustomHFIndex):
         return np.array(ids), np.array(vectors), distances  # shapes (batch_size, n_docs) and (batch_size, n_docs, d)
 
     def get_doc_dict(self, doc_id: int):
-        if doc_id >= 0:
-            return self.dataset[doc_id]
-        else:
-            dataset_size = len(self.dataset)
-            rand_idx = randint(0, dataset_size)
-            return self.dataset[rand_idx]
-
+        return self.dataset[doc_id]
 
 class CanonicalMemoryHFIndex(HFIndexBase):
 
