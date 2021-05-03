@@ -31,7 +31,7 @@ class EvaluateSalience(object):
         from datasets import load_metric
         rouge = load_metric("rouge")
 
-        rank_fields = ["random", "first", "last"]
+        rank_fields = ["random", "ascending", "descending"]
 
         if isinstance(src_json, str):
             src_json = [src_json]
@@ -130,7 +130,7 @@ class EvaluateSalience(object):
                                             [s["text"] for s, pred in zip(obj["passages"], salient_predictions) if
                                              pred == True])
 
-                                    elif field == "first":
+                                    elif field == "ascending":
 
                                         # Randomly set number of examples.
                                         salient_predictions = ([True] * num_salient_examples) + (
@@ -141,7 +141,7 @@ class EvaluateSalience(object):
                                              pred == True])
 
 
-                                    elif field == "last":
+                                    elif field == "descending":
 
                                         salient_predictions = (
                                                                       [False] * (len(
@@ -218,13 +218,13 @@ class EvaluateSalience(object):
                                             for i in indices[:num_salient_examples]:
                                                 salient_predictions[i] = True
 
-                                        elif field == "first":
+                                        elif field == "ascending":
 
                                             # Randomly set number of examples.
                                             salient_predictions = ([True] * num_salient_examples) + (
                                                     [False] * (len(salience_binary_list) - num_salient_examples))
 
-                                        elif field == "last":
+                                        elif field == "descending":
 
                                             salient_predictions = (
                                                                           [False] * (len(
@@ -277,11 +277,11 @@ class EvaluateSalience(object):
                                         shuffle(indices)
 
                                         salient_predictions_scores = indices
-                                    elif field == "first":
+                                    elif field == "ascending":
 
                                         salient_predictions_scores = [r for r in range(len(salience_binary_list))]
 
-                                    elif field == "last":
+                                    elif field == "descending":
 
                                         salient_predictions_scores = list(
                                             reversed([r for r in range(len(salience_binary_list))]))
