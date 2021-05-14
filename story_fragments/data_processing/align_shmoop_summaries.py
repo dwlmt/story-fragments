@@ -15,10 +15,10 @@ class AlignSummariesAndText(object):
         self.nlp = spacy.load("en_core_web_md")
 
     def align(self,
-               summaries_path: str,
-               full_text_path: str,
-               output_file: str,
-               glob_pattern: str= "**/*.txt.utf8"):
+              summaries_path: str,
+              full_text_path: str,
+              output_file: str,
+              glob_pattern: str = "**/*.txt.utf8"):
 
         output_dir = os.path.dirname(output_file)
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -42,7 +42,6 @@ class AlignSummariesAndText(object):
                 print(f"Book: {k}")
                 for s_k, s_v in summaries.items():
                     if s_k in texts:
-
                         print(f"Chapter: {s_k}")
 
                         summary = summaries[s_k]
@@ -50,13 +49,12 @@ class AlignSummariesAndText(object):
 
                         chapter = {}
                         chapter["seq_num"] = summary["chapter"]
-                        #"text" : summary["text"],
-                        chapter["summary"] = {"sentences" : summary["sentences"]}
-                        #"text": text["text"],
+                        # "text" : summary["text"],
+                        chapter["summary"] = {"sentences": summary["sentences"]}
+                        # "text": text["text"],
                         chapter["full_text"] = {"sentences": text["sentences"]}
                         book["title"] = summary["title"]
                         chapters.append(chapter)
-
 
                 book["chapters"] = chapters
                 books.append(book)
@@ -64,7 +62,6 @@ class AlignSummariesAndText(object):
         with jsonlines.open(f'{output_file}', mode='w') as writer:
             for b in books:
                 writer.write(b)
-
 
     def read_into_structure(self, summaries_list):
 
@@ -75,11 +72,11 @@ class AlignSummariesAndText(object):
             dir_name = dir_name.split("/")[-1]
             base_filename = os.path.basename(sum_file)
             base_filename = base_filename.replace(".txt.utf8", "")
-            #print(sum_file, dir_name, base_filename)
+            # print(sum_file, dir_name, base_filename)
 
             with open(sum_file, mode="r", encoding="utf-8") as f:
                 text = f.read()
-                text = text.replace("\n"," ").replace("\t"," ")
+                text = text.replace("\n", " ").replace("\t", " ")
 
             key = f"{dir_name}"
             if key not in data_dict:
@@ -96,7 +93,7 @@ class AlignSummariesAndText(object):
         for k, v in data_dict.items():
             for chapter in v:
                 text = chapter["text"]
-                #doc = self.nlp(text)
+                # doc = self.nlp(text)
                 sentences_split = text_to_sentences(text).split('\n')
 
                 sentences = []
@@ -106,7 +103,6 @@ class AlignSummariesAndText(object):
                     text = sent.strip()
 
                     if len(text) > 0:
-
                         sentence_dict = {}
                         sentence_dict["seq_num"] = i
                         sentence_dict["text"] = text
@@ -117,14 +113,12 @@ class AlignSummariesAndText(object):
 
                 chapter["sentences"] = sentences
 
-
         # Convert list to dict for fast access.
         for k, v in data_dict.items():
             chapter_dict = collections.OrderedDict()
             for chapter in v:
                 chapter_dict[chapter["chapter"]] = chapter
             data_dict[k] = chapter_dict
-
 
         return data_dict
 

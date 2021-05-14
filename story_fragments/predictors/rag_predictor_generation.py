@@ -1,16 +1,12 @@
 import os
 import re
-from random import random, choice
+from random import choice
 from typing import List
 
-import more_itertools
 from allennlp.common.util import JsonDict
-from allennlp.data import DatasetReader, Instance
+from allennlp.data import DatasetReader
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
-from overrides import overrides
-from transformers import AutoTokenizer
-from blingfire import text_to_sentences
 
 from story_fragments.predictors.utils import input_to_passages
 
@@ -18,13 +14,16 @@ from story_fragments.predictors.utils import input_to_passages
 def parse_bool(b):
     return b == "True" or b == "TRUE" or b == "true" or b == "1"
 
+
 _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
+
 
 @Predictor.register("rag-fragments-generation")
 class RagFragmentsGenerationPredictor(Predictor):
     """
     Generate text from the RAG fragments model.
     """
+
     def __init__(
             self, model: Model,
             dataset_reader: DatasetReader
@@ -49,14 +48,13 @@ class RagFragmentsGenerationPredictor(Predictor):
 
         self._top_k = int(os.getenv("TOP_K", default=50))
         self._top_p = float(os.getenv("TOP_P", default=0.9))
-        self._temperature =  float(os.getenv("TEMPERATURE", default=1.0))
+        self._temperature = float(os.getenv("TEMPERATURE", default=1.0))
 
         self._length_penalty = float(os.getenv("LENGTH_PENALTY", default=1.0))
         self._diversity_penalty = float(os.getenv("DIVERSITY_PENALTY", default=0.5))
         self._do_sample = parse_bool(os.getenv("DO_SAMPLE", default="True"))
 
-
-    def predict(self, sentences: List[str] = None,  text: str = None, passage: str = None) -> JsonDict:
+    def predict(self, sentences: List[str] = None, text: str = None, passage: str = None) -> JsonDict:
 
         return self.predict_json({"sentence": sentences, "text": text, "passage": passage})
 
@@ -73,12 +71,12 @@ class RagFragmentsGenerationPredictor(Predictor):
 
         passages = input_to_passages(inputs, sentence_batch_size=self._sentence_batch_size,
                                      sentence_label_size=self._sentence_label_size,
-                                     sentence_step_size=self._sentence_step_size,  max_passages=self._max_passages)
+                                     sentence_step_size=self._sentence_step_size, max_passages=self._max_passages)
 
         for i, batch in enumerate(passages):
             sentences_joined = batch['text']
 
-            #results["inputs"]["passages"].append(sentences_joined)
+            # results["inputs"]["passages"].append(sentences_joined)
             results["passages"].append(batch)
 
             print(f"{sentences_joined}")
@@ -120,7 +118,7 @@ class RagFragmentsGenerationPredictor(Predictor):
 
             elif self._add_to_memory:
                 print(f"Add to memory: {sentences_joined}")
-                self._model.add_to_memory(sentences_joined,  add_to_memory=self._add_to_memory)
+                self._model.add_to_memory(sentences_joined, add_to_memory=self._add_to_memory)
 
         self._model.clear_memory()
 
@@ -128,4 +126,3 @@ class RagFragmentsGenerationPredictor(Predictor):
         results["story"] = _RE_COMBINE_WHITESPACE.sub(" ", story).strip()
 
         return results
-

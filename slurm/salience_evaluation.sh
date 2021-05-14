@@ -3,9 +3,9 @@
 #SBATCH -e /home/%u/slurm_logs/slurm-%A_%a.out
 #SBATCH -N 1	  # nodes requested
 #SBATCH -n 1	  # tasks requested
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:0
 #SBATCH --mem=24g  # Memory
-#SBATCH --cpus-per-task=12  # number of cpus to use - there are 32 on each node.
+#SBATCH --cpus-per-task=8  # number of cpus to use - there are 32 on each node.
 
 echo "============"
 echo "Initialize Env ========"
@@ -54,12 +54,7 @@ cd "${EXP_ROOT}" # helps AllenNLP behave
 
 cd /home/s1569885/git/story-fragments/story_fragments/data_processing 
 
-python aligned_salience_processing.py events \
---src-json ${BATCH_FILE_PATH} \
---output-dir ${SERIAL_DIR} --match-type whole \
---more-k-diff-similarity 0.05 --plus-minus-percentile 10.0 \
---min-threshold 0.30 --earliest-k 3 --nearest-k 3 \
---sentence-transformer-name "paraphrase-distilroberta-base-v1"
+python evaluate_salience.py evaluate --src-json-glob=${SRC_JSON_GLOB}  --salience-override-json=${SALIENCE_OVERRIDE_JSON} --output-dir=${SERIAL_DIR} --salience-score-filter=0.35
 
 echo "============"
 echo "Salience Extraction Task finished"

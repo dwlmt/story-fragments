@@ -1,4 +1,3 @@
-import copy
 import glob
 import os
 import pathlib
@@ -10,8 +9,8 @@ from jsonlines import jsonlines
 
 _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
-class ExportWholeTextDatasetToJson(object):
 
+class ExportWholeTextDatasetToJson(object):
 
     def export(self,
                dataset_directory: str,
@@ -29,6 +28,7 @@ class ExportWholeTextDatasetToJson(object):
 
     ''' Outputs datasets to a nested format.
     '''
+
     def _cleanup_text(self, text):
 
         text = text.replace("\t", " ")
@@ -69,6 +69,7 @@ class ExportWholeTextDatasetToJson(object):
 
         for example in _reader(book_files=book_files):
             yield example
+
 
 if __name__ == '__main__':
     fire.Fire(ExportWholeTextDatasetToJson)

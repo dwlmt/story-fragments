@@ -2,11 +2,10 @@ import logging
 from typing import Dict, Any, List
 
 import torch
-
 from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
-from allennlp.training.metrics import Metric, SequenceAccuracy, Perplexity, CategoricalAccuracy
-from transformers import AutoModel, BartForConditionalGeneration, AutoTokenizer
+from allennlp.training.metrics import Perplexity, CategoricalAccuracy
+from transformers import BartForConditionalGeneration, AutoTokenizer
 
 PAD_TOKEN = 1
 
@@ -50,7 +49,7 @@ class BartFragmentsModel(Model):
             label_tokens = labels["tokens"]['token_ids']
 
             trans_output = self.transformer(input_ids=input_ids,
-                                            #attention_mask=input_mask,
+                                            # attention_mask=input_mask,
                                             labels=label_tokens)
 
             results["loss"] = trans_output[0]
@@ -73,7 +72,7 @@ class BartFragmentsModel(Model):
                                                           top_p=0.9)
                 results["generated_sequences"] = generated_sequences
 
-    def make_output_human_readable( self, output_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+    def make_output_human_readable(self, output_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         if "generated_sequences" in output_dict:
             output_dict["generated_sequences"] = self.tokenizer.decode(output_dict["generated_sequences"],
                                                                        skip_special_tokens=True)
@@ -90,7 +89,7 @@ class BartFragmentsModel(Model):
                 mask = (label_tokens != PAD_TOKEN)
 
                 for acc in self.lm_accuracy_top_k:
-                    #print(logits.size(), label_tokens.size())
+                    # print(logits.size(), label_tokens.size())
                     self.metrics[f'lm_accuracy_{acc}'](logits, label_tokens, mask=mask)
 
     def get_metrics(self, reset: bool = False) -> Dict[str, float]:

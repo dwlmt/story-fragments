@@ -1,14 +1,11 @@
 import logging
 from typing import Dict, Any, List
 
-import more_itertools
 import torch
 import torch.nn.functional as F
 from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
-from allennlp.training.metrics import CategoricalAccuracy
 from sentence_transformers import SentenceTransformer, models
-from sentence_transformers.util import pytorch_cos_sim
 from torch.nn import CrossEntropyLoss
 from transformers import AutoTokenizer, BertTokenizer
 from transformers import DPRContextEncoder
@@ -153,29 +150,33 @@ class DiscFragmentsModel(Model):
             retriever_outputs = self.retriever.retrieve(
                 question_encoder_last_hidden_state.cpu().detach().float().numpy(), self.config.combined_n_docs)
 
-            #print(f"Retrieved docs: {retriever_outputs}")
+            # print(f"Retrieved docs: {retriever_outputs}")
 
             retrieved_doc_embeds, retrieved_doc_ids, retrieved_doc_text = retriever_outputs
 
-            #print(f"Retreived doc text: {retrieved_doc_text}")
+            # print(f"Retreived doc text: {retrieved_doc_text}")
             extracted_doc_texts = [t['text'] for t in retrieved_doc_text]
             extracted_doc_texts_flattened = []
             for ext in extracted_doc_texts:
                 extracted_doc_texts_flattened.extend(ext)
 
+            # print(f"Extracted text: {extracted_doc_texts_flattened}")
+            retrieved_encoded_text_ids = self.tokenizer.batch_encode_plus(extracted_doc_texts_flattened,
+                                                                          return_tensors='pt',
+                                                                          padding=True,
+                                                                          truncation=True)
 
-            #print(f"Extracted text: {extracted_doc_texts_flattened}")
-            retrieved_encoded_text_ids = self.tokenizer.batch_encode_plus(extracted_doc_texts_flattened, return_tensors='pt',
-                                                                    padding=True,
-                                                                    truncation=True)
-
-            #print(f"Encoded text ids: {retrieved_encoded_text_ids}")
-            encoded_retrieved_contexts = self.context_model({"input_ids": retrieved_encoded_text_ids["input_ids"].to(question_encoder_last_hidden_state.device),
-                                                 "attention_mask": retrieved_encoded_text_ids["attention_mask"].to(question_encoder_last_hidden_state.device)})[
+            # print(f"Encoded text ids: {retrieved_encoded_text_ids}")
+            encoded_retrieved_contexts = self.context_model(
+                {"input_ids": retrieved_encoded_text_ids["input_ids"].to(question_encoder_last_hidden_state.device),
+                 "attention_mask": retrieved_encoded_text_ids["attention_mask"].to(
+                     question_encoder_last_hidden_state.device)})[
                 "sentence_embedding"]
 
-            #encoded_retrieved_contexts = torch.stack(encoded_retrieved_contexts_list)
-            encoded_retrieved_contexts = encoded_retrieved_contexts.view(int(encoded_retrieved_contexts.size()[0] / self.config.combined_n_docs), self.config.combined_n_docs, -1)
+            # encoded_retrieved_contexts = torch.stack(encoded_retrieved_contexts_list)
+            encoded_retrieved_contexts = encoded_retrieved_contexts.view(
+                int(encoded_retrieved_contexts.size()[0] / self.config.combined_n_docs), self.config.combined_n_docs,
+                -1)
 
             # set to correct device
             retrieved_doc_embeds = torch.tensor(retrieved_doc_embeds).to(
@@ -190,10 +191,10 @@ class DiscFragmentsModel(Model):
 
             doc_probs = F.softmax(doc_scores, dim=-1)
             doc_probs_exp = (torch.unsqueeze(doc_probs, dim=2)).expand_as(encoded_retrieved_contexts)
-            #print(f"Pre agg: {doc_probs_exp}, {doc_probs_exp.size()}, {retrieved_doc_embeds}, {retrieved_doc_embeds.size()}")
+            # print(f"Pre agg: {doc_probs_exp}, {doc_probs_exp.size()}, {retrieved_doc_embeds}, {retrieved_doc_embeds.size()}")
 
             agg_vector = torch.sum((doc_probs_exp * encoded_retrieved_contexts), dim=-2)
-            #print(f"Agg vector: {context_output}, {context_output.size()},{agg_vector}, {agg_vector.size()}")
+            # print(f"Agg vector: {context_output}, {context_output.size()},{agg_vector}, {agg_vector.size()}")
 
             context_output = (context_output * (1.0 - self.reference_embedding_weight)) + (
                     agg_vector * self.reference_embedding_weight)
@@ -232,7 +233,7 @@ class DiscFragmentsModel(Model):
             else:
                 neg_label_output = None
 
-            #print(f"Label ids: {label_ids}, Label mask : {label_mask}, Negative ids: {negative_ids}, "
+            # print(f"Label ids: {label_ids}, Label mask : {label_mask}, Negative ids: {negative_ids}, "
             #      f"Negative Mask: {neg_label_mask}, Context Output: {context_output}")
 
             if neg_label_output is not None:

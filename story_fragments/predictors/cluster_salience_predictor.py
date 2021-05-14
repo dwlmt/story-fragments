@@ -1,30 +1,20 @@
 import copy
 import os
-from itertools import zip_longest
 from typing import List
-import scipy
 
 import more_itertools
 import nltk
 import numpy
-import sklearn
-import torch
 from allennlp.common.util import JsonDict
 from allennlp.data import DatasetReader, Instance
 from allennlp.data.fields import MetadataField, TextField
-from allennlp.data.token_indexers import PretrainedTransformerIndexer
-from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
-from nltk.sentiment import SentimentIntensityAnalyzer
 from scipy.signal import find_peaks
 from scipy.spatial.distance import euclidean
-from scipy.stats import wasserstein_distance
 from sentence_transformers import SentenceTransformer
 from sklearn.cluster import KMeans
-from sklearn.neighbors._dist_metrics import DistanceMetric
 from sklearn.preprocessing import MinMaxScaler
-from torch import nn
 
 from story_fragments.predictors.utils import input_to_passages
 
@@ -36,6 +26,7 @@ def parse_bool(b):
 
 
 embeddings_fields = ["retrieved_doc_embedding", "generator_enc_embedding", "generator_dec_embedding"]
+
 
 @Predictor.register("cluster-salience-predictor")
 class ClusterSaliencePredictor(Predictor):
@@ -58,7 +49,6 @@ class ClusterSaliencePredictor(Predictor):
         self._sentence_label_size = int(os.getenv("SENTENCE_LABEL_SIZE", default=1))
         self._sentence_step_size = int(os.getenv("SENTENCE_STEP_SIZE", default=4))
         self._max_passages = int(os.getenv("MAX_PASSAGES", default=1000000))
-
 
         self._peak_distance = int(os.getenv("PEAK_DISTANCE", default=5))
         self._peak_prominence = float(os.getenv("PEAK_PROMINENCE", default=0.10))
@@ -104,7 +94,7 @@ class ClusterSaliencePredictor(Predictor):
                                          prefill=prefill, previous_text=self._previous_text)
 
             if self._abridge and i == 0:
-               pass#results["orig_passages"] = copy.deepcopy(passages)
+                pass  # results["orig_passages"] = copy.deepcopy(passages)
 
             # Set all the metrics to 0.
             for p in passages:
@@ -176,7 +166,7 @@ class ClusterSaliencePredictor(Predictor):
                 retained_passages = [p for p in results["passages"] if
                                      p["peaks"][f"{self._abridge_metric}_rank"] >= (passages_len - number_to_keep)]
 
-            inputs = {"text": " ".join([p["text"] for p in retained_passages]).replace("<PLACEHOLDER>","")}
+            inputs = {"text": " ".join([p["text"] for p in retained_passages]).replace("<PLACEHOLDER>", "")}
             print(f"ABRIDGED TEXT: {inputs}")
         return inputs
 

@@ -4,14 +4,9 @@ import collections
 import glob
 import os
 import re
-import textwrap
-from pathlib import Path
-from typing import List, OrderedDict
 
 import fire
 import jsonlines
-import xml
-
 import more_itertools
 
 
@@ -20,13 +15,13 @@ class ConvertPropLearner(object):
     '''
 
     def convert(self,
-             src_path: str,
-             output_file: str,
-             glob_pattern: str = '*.sty'
-             ):
-        #print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
+                src_path: str,
+                output_file: str,
+                glob_pattern: str = '*.sty'
+                ):
+        # print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
 
-        #Path(os.path.basename(output_file)).mkdir(parents=True, exist_ok=True)
+        # Path(os.path.basename(output_file)).mkdir(parents=True, exist_ok=True)
 
         with jsonlines.open(f"{output_file}", mode='w') as writer:
 
@@ -35,7 +30,7 @@ class ConvertPropLearner(object):
 
                 story_json = {}
 
-                story_json["title"] = os.path.basename(file).replace(".sty","")
+                story_json["title"] = os.path.basename(file).replace(".sty", "")
                 story_json["id"] = f"{i}"
 
                 import xml.etree.ElementTree as ET
@@ -58,17 +53,18 @@ class ConvertPropLearner(object):
 
                     token_dict[int(elem.attrib.get("id"))] = {"id": int(elem.attrib.get("id")),
                                                               "len": int(elem.attrib.get("len")),
-                                                        "off": int(elem.attrib.get("off")),
+                                                              "off": int(elem.attrib.get("off")),
                                                               "text": elem.text}
 
-                    for j in range(int(elem.attrib.get("off")),int(elem.attrib.get("off")) + int(elem.attrib.get("len"))):
+                    for j in range(int(elem.attrib.get("off")),
+                                   int(elem.attrib.get("off")) + int(elem.attrib.get("len"))):
                         offset_to_token_dict[j] = int(elem.attrib.get("id"))
 
                 text_id = "edu.mit.parsing.sentence"
                 story_sentences = tree.find(f"//rep[@id = '{text_id}']")
                 for k, elem in enumerate(story_sentences.findall(".//desc")):
-                    sentence_dict = {"seq_num": k,"id": int(elem.attrib.get("id")), "len": int(elem.attrib.get("len")),
-                                                        "off": int(elem.attrib.get("off")),
+                    sentence_dict = {"seq_num": k, "id": int(elem.attrib.get("id")), "len": int(elem.attrib.get("len")),
+                                     "off": int(elem.attrib.get("off")),
                                      "salient": False, "salience_score": 0.0}
 
                     for j in range(int(elem.attrib.get("off")),
@@ -78,9 +74,8 @@ class ConvertPropLearner(object):
                     sentence_token_list = []
                     sentence_token_ids = []
                     text_indices = elem.text.split("~")
-                 
-                    for ind in text_indices:
 
+                    for ind in text_indices:
                         sentence_token_list.append(token_dict[int(ind)]["text"])
                         sentence_token_ids.append(token_dict[int(ind)]["id"])
 
@@ -110,7 +105,6 @@ class ConvertPropLearner(object):
 
                     description = elem.text.split("|")
 
-
                     offset = elem.attrib.get("off")
 
                     statement_list = [re.split("[:,~]", item) for item in description[1:]]
@@ -118,7 +112,7 @@ class ConvertPropLearner(object):
                     print(f"Statement list: {statement_list}")
 
                     propp_functions = [[int(i) for i in statement[1:]] if statement[0] == "ACTUAL" else [] for
-                                        statement in statement_list]
+                                       statement in statement_list]
 
                     propp_functions = more_itertools.flatten(propp_functions)
 
@@ -151,8 +145,7 @@ class ConvertPropLearner(object):
                 for elem in events:
                     print("Semantic Roles: ", elem.tag, elem.attrib, elem.text)
 
-                #print(offset_to_sentence_dict)
-
+                # print(offset_to_sentence_dict)
 
                 sentences = []
                 for k, v in sentences_dict.items():
@@ -162,9 +155,6 @@ class ConvertPropLearner(object):
                 story_json["sentences"] = sentences
 
                 writer.write(story_json)
-
-
-
 
 
 if __name__ == '__main__':

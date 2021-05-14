@@ -142,7 +142,7 @@ class GlobCorpusInterleavedReader(DatasetReader):
 
         for i, example in enumerate(dataset):
 
-            if self.search_negative_labels :#k_nearest: int = 5,
+            if self.search_negative_labels:  # k_nearest: int = 5,
                 try:
                     label = example["label"]
                     neg_examples = dataset.get_nearest_examples("label", label, k=1 + self.k_nearest).examples['label'][
@@ -255,12 +255,12 @@ class GutenbergCorpusInterleavedReader(GlobCorpusInterleavedReader):
                  test_split: int = 10,
                  **kwargs):
         super(GutenbergCorpusInterleavedReader, self).__init__(generator_model_name=generator_model_name,
-                                                             generator_max_length=generator_max_length,
-                                                             encoder_model_name=encoder_model_name,
-                                                             encoder_max_length=encoder_max_length,
-                                                             add_special_tokens=add_special_tokens,
-                                                             train_split=train_split,
-                                                             validation_split=validation_split,
-                                                             test_split=test_split,
-                                                             **kwargs
-                                                             )
+                                                               generator_max_length=generator_max_length,
+                                                               encoder_model_name=encoder_model_name,
+                                                               encoder_max_length=encoder_max_length,
+                                                               add_special_tokens=add_special_tokens,
+                                                               train_split=train_split,
+                                                               validation_split=validation_split,
+                                                               test_split=test_split,
+                                                               **kwargs
+                                                               )

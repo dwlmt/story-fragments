@@ -21,7 +21,7 @@ from __future__ import absolute_import, division, print_function
 import glob
 import os
 import pathlib
-from random import shuffle, Random
+from random import Random
 
 import datasets
 from datasets.info import SupervisedKeysData
@@ -43,13 +43,13 @@ _BOOK_CORPUS_URL = "https://t.co/J3EaSEgwW0?amp=1"
 _BOOK_CORPUS_GLOB_PATH = "**/*.epub.txt"
 
 _SCHMOOP_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1y5Ac3LARFuMAV0bmxy9V91JFkc8J59nP"
-_SCHMOOP_CORPUS_GLOB_PATH =  "**/*.txt.utf8"
+_SCHMOOP_CORPUS_GLOB_PATH = "**/*.txt.utf8"
 
 _MOVIE_CORPUS_URL = "https://drive.google.com/uc?export=download&id=16DBMpLY-w5ZF0yph-D3lhRjS_Cgwj-vZ"
 _MOVIE_CORPUS_GLOB_PATH = "**/scripts/parsed/full/*.txt"
 
 _GUTENBERG_CORPUS_URL = "https://drive.google.com/uc?export=download&id=1dObECu3jGIAFpMQtrkIu2uTwdLFsAvfj"
-_GUTENBERG_CORPUS_GLOB_PATH =  "**/*.txt"
+_GUTENBERG_CORPUS_GLOB_PATH = "**/*.txt"
 
 
 class GlobInterleavedHfDatasetConfig(datasets.BuilderConfig):
@@ -407,7 +407,6 @@ class GlobCorpusOpen(datasets.GeneratorBasedBuilder):
                         _id += 1
                 except Exception as e:
                     print(f"{e}")
-                    
 
         for example in interleave_examples(_reader(book_files=book_files), self.config.batch_size,
                                            self.config.input_size,

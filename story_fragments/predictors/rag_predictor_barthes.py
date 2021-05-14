@@ -34,6 +34,7 @@ def parse_bool(b):
 
 embeddings_fields = ["retrieved_doc_embedding", "generator_enc_embedding", "generator_dec_embedding"]
 
+
 @Predictor.register("rag-fragments-barthes")
 class RagFragmentsBarthesPredictor(Predictor):
     """ Runs predictions used the barthes cardinal function method.
@@ -84,7 +85,8 @@ class RagFragmentsBarthesPredictor(Predictor):
         self._cluster_cosine = parse_bool(os.getenv("CLUSTER_COSINE", default="True"))
         self._vector_batch_size = int(os.getenv("VECTOR_BATCH_SIZE", default=20))
 
-        self.sentiment_negative_mixture_weighting = float(os.getenv("SENTIMENT_NEGATIVE_MIXTURE_WEIGHTING", default=2.0))
+        self.sentiment_negative_mixture_weighting = float(
+            os.getenv("SENTIMENT_NEGATIVE_MIXTURE_WEIGHTING", default=2.0))
         self.salience_mixture_weighting = float(os.getenv("SALIENCE_MIXTURE_WEIGHTING", default=2.0))
 
         self._add_retrieved_docs = parse_bool(os.getenv("ADD_RETRIEVED_DOCS", default="False"))
@@ -149,7 +151,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                                          prefill=prefill)
 
             if self._abridge and i == 0:
-               pass#results["orig_passages"] = copy.deepcopy(passages)
+                pass  # results["orig_passages"] = copy.deepcopy(passages)
 
             # Set all the metrics to 0.
             for p in passages:
@@ -160,7 +162,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                 p["metrics"]["avg_log_likelihood"] = 0.0
                 p["metrics"]["avg_log_likelihood_salience_impact_adj"] = 0.0
 
-                field_list = ["perplexity", "avg_log_likelihood","sentiment_abs"]
+                field_list = ["perplexity", "avg_log_likelihood", "sentiment_abs"]
 
                 if self._retrieval_metrics:
                     for k in field_list:
@@ -171,7 +173,6 @@ class RagFragmentsBarthesPredictor(Predictor):
                     for k in field_list:
                         p["metrics"][f"{k}_swapped"] = 0.0
                         p["metrics"][f"{k}_swapped_diff"] = 0.0
-
 
                 salience_dict = {}
                 for k, v in p["metrics"].items():
@@ -207,9 +208,10 @@ class RagFragmentsBarthesPredictor(Predictor):
                 if sentiment < 0:
                     sentiment *= self.sentiment_negative_mixture_weighting
 
-                sentiment_adj = (abs(sentiment + 1.0))
+                sentiment_adj = (abs(sentiment) + 1.0)
 
-                p["metrics"]["avg_log_likelihood_salience_impact_adj"] = p["metrics"][f"avg_log_likelihood_salience"] * sentiment_adj
+                p["metrics"]["avg_log_likelihood_salience_impact_adj"] = p["metrics"][
+                                                                             f"avg_log_likelihood_salience"] * sentiment_adj
 
             self._calc_peaks(results)
 
@@ -239,7 +241,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                 retained_passages = [p for p in results["passages"] if
                                      p["peaks"][f"{self._abridge_metric}_rank"] >= (passages_len - number_to_keep)]
 
-            inputs = {"text": " ".join([p["text"] for p in retained_passages]).replace("<PLACEHOLDER>","")}
+            inputs = {"text": " ".join([p["text"] for p in retained_passages]).replace("<PLACEHOLDER>", "")}
             print(f"ABRIDGED TEXT: {inputs}")
         return inputs
 
@@ -269,7 +271,7 @@ class RagFragmentsBarthesPredictor(Predictor):
                         no_kb_output.append(no_kb_results)
 
                 if self._swap_metrics:
-                    p_swapped_results = self._model_output(passages_swapped[i-1])
+                    p_swapped_results = self._model_output(passages_swapped[i - 1])
                     passages_swapped_output.append(p_swapped_results)
 
             if p_off is not None:
@@ -292,15 +294,13 @@ class RagFragmentsBarthesPredictor(Predictor):
             # If a sliding window is used then only add the complete passage to memory.
             if (i % add_every == 0 or add_every == 1) and self._add_to_memory:
                 ids, context_embeddings = self._model.add_to_memory(p["text"], add_to_memory=self._add_to_memory)
-                #print(ids, context_embeddings)
+                # print(ids, context_embeddings)
                 memory_id = numpy.asscalar(ids)
 
                 p["memory_id"] = memory_id
 
                 if self._keep_embeddings:
-
                     p["answer_embedding"] = context_embeddings[0].tolist()
-
 
                 print(f"ADD TO MEMORY: {ids}, {context_embeddings.shape}")
 
@@ -308,7 +308,6 @@ class RagFragmentsBarthesPredictor(Predictor):
         for p, o in zip(passages, passages_output):
             self._map_output(o, p)
             results["passages"].append(p)
-
 
         for p, o in zip(passages_offset, passages_offset_output):
             self._map_output(o, p)
@@ -379,13 +378,12 @@ class RagFragmentsBarthesPredictor(Predictor):
             # print(f"Centroids: {centroids}")
             cluster_distances = distance_from_centroid(assigned_clusters, X, centroids)
             cluster_distances_flipped = [-d for d in cluster_distances]
-            
+
             for p, d, c in zip(passages, cluster_distances_flipped, assigned_clusters):
                 p["metrics"]["cluster"] = c.item()
                 p["metrics"]["cluster_score"] = d
 
                 # "avg_log_likelihood""sentiment_abs"
-
 
                 sentiment = p["metrics"]["sentiment"]
                 if sentiment < 0:
@@ -395,10 +393,12 @@ class RagFragmentsBarthesPredictor(Predictor):
 
                 p["metrics"]["cluster_score_imp_adj"] = d * sentiment_adj
 
-                #print(p["metrics"])
-                p["metrics"]["avg_log_likelihood_salience_cluster"] = p["metrics"]["cluster_score"] + (self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"])
-                p["metrics"]["avg_log_likelihood_salience_cluster_imp_adj"] = ((p["metrics"]["cluster_score"] +  (self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"]))) * sentiment_adj
-
+                # print(p["metrics"])
+                p["metrics"]["avg_log_likelihood_salience_cluster"] = p["metrics"]["cluster_score"] + (
+                            self.salience_mixture_weighting * p["metrics"]["avg_log_likelihood_salience"])
+                p["metrics"]["avg_log_likelihood_salience_cluster_imp_adj"] = ((p["metrics"]["cluster_score"] + (
+                            self.salience_mixture_weighting * p["metrics"][
+                        "avg_log_likelihood_salience"]))) * sentiment_adj
 
     def passage_offsets(self, passages):
         passages_offset = []
@@ -434,6 +434,7 @@ class RagFragmentsBarthesPredictor(Predictor):
 
     def _calc_salience(self, results, passages_offset):
         salience_field_dict = {"avg_log_likelihood": False, "perplexity": False, }
+        # Flip (negate) all the distances as with avg_log_likelihood higher should be better.
         for field in embeddings_fields:
             f_dict = {f"{field}_l1_dist": True,
                       f"{field}_l2_dist": True,
@@ -479,8 +480,8 @@ class RagFragmentsBarthesPredictor(Predictor):
         passages = results["passages"]
         for p in passages:
             p["peaks"] = {}
-        peak_field_dict = { "cluster_score": False,
-                            "avg_log_likelihood": False,
+        peak_field_dict = {"cluster_score": False,
+                           "avg_log_likelihood": False,
                            "perplexity": False,
                            "sentiment": False,
                            "sentiment_abs": False,
@@ -488,11 +489,11 @@ class RagFragmentsBarthesPredictor(Predictor):
                            "avg_log_likelihood_salience_cluster": False,
                            "avg_log_likelihood_salience_cluster_imp_adj": False}
         for field in embeddings_fields:
-            f_dict = {f"{field}_l1_dist": False,#True,
-                      f"{field}_l2_dist": False,#True,
+            f_dict = {f"{field}_l1_dist": False,  # True,
+                      f"{field}_l2_dist": False,  # True,
                       f"{field}_cosine_sim": False,
                       f"{field}_dot_product": False,
-                      f"{field}_wasserstein_dist": False, #True,
+                      f"{field}_wasserstein_dist": False,  # True,
                       f"{field}_l1_dist_salience": False,
                       f"{field}_l2_dist_salience": False,
                       f"{field}_cosine_sim_salience": False,
@@ -574,9 +575,6 @@ class RagFragmentsBarthesPredictor(Predictor):
             for i, p in enumerate(results["passages"]):
                 p["seq_num"] = i
 
-
-
-
     def calc_diff_metrics(self, p):
         kb_metrics_dict = {}
         for k, v in p["metrics"].items():
@@ -593,8 +591,8 @@ class RagFragmentsBarthesPredictor(Predictor):
         passage["metrics"]["perplexity_no_ret_diff"] = passage["metrics"]["perplexity"] - passage["metrics"][
             "perplexity_no_ret"]
         passage["metrics"]["avg_log_likelihood_no_ret_diff"] = passage["metrics"]["avg_log_likelihood"] - \
-                                                              passage["metrics"][
-                                                                  "avg_log_likelihood_no_ret"]
+                                                               passage["metrics"][
+                                                                   "avg_log_likelihood_no_ret"]
 
     def swapped_perplexity_metrics(self, passage, output):
         passage["metrics"]["perplexity_swapped"] = output["perplexity"].item()
@@ -602,8 +600,8 @@ class RagFragmentsBarthesPredictor(Predictor):
         passage["metrics"]["perplexity_swapped_diff"] = passage["metrics"]["perplexity"] - passage["metrics"][
             "perplexity_swapped"]
         passage["metrics"]["avg_log_likelihood_swapped_diff"] = passage["metrics"]["avg_log_likelihood"] - \
-                                                              passage["metrics"][
-                                                                  "avg_log_likelihood_swapped"]
+                                                                passage["metrics"][
+                                                                    "avg_log_likelihood_swapped"]
 
     def calc_vector_metrics(self, passages, passages_output, extension=""):
         for i, (first, second) in enumerate(more_itertools.pairwise(passages_output)):
@@ -611,17 +609,16 @@ class RagFragmentsBarthesPredictor(Predictor):
             if first == None or second == None:
                 continue
 
-
-            self._calc_embedding_metrics(extension, first, second, i, passages, "retrieved_doc_embeddings", "retrieved_doc_embedding")
+            self._calc_embedding_metrics(extension, first, second, i, passages, "retrieved_doc_embeddings",
+                                         "retrieved_doc_embedding")
             self._calc_embedding_metrics(extension, first, second, i, passages, "generator_enc_embeddings",
                                          "generator_enc_embedding")
-            self._calc_embedding_metrics(extension, first, second, i, passages, "generator_dec_embeddings" ,
-                                         "generator_dec_embedding" )
+            self._calc_embedding_metrics(extension, first, second, i, passages, "generator_dec_embeddings",
+                                         "generator_dec_embedding")
             self._calc_embedding_metrics(extension, first, second, i, passages, "question_embeddings",
                                          "question_embedding")
             self._calc_embedding_metrics(extension, first, second, i, passages, "answer_embeddings",
                                          "answer_embedding")
-
 
     def _calc_embedding_metrics(self, extension, first, second, i, passages, output_name, metric_name):
         if output_name in first and output_name in second:
@@ -648,7 +645,6 @@ class RagFragmentsBarthesPredictor(Predictor):
 
         if len(y.size()) < len(x.size()):
             y = torch.unsqueeze(y, dim=0).expand_as(x)
-
 
         # norm = numpy.linalg.norm(x, ord=2)
         # x = x / norm
@@ -681,7 +677,6 @@ class RagFragmentsBarthesPredictor(Predictor):
         example["metrics"]["sentiment"] = output["sentiment"]
         example["metrics"]["sentiment_abs"] = abs(output["sentiment"])
 
-
         if self._keep_embeddings:
             if "retrieved_doc_embeddings" in output:
                 example["retrieved_doc_embedding"] = output["retrieved_doc_embeddings"].tolist()
@@ -694,7 +689,6 @@ class RagFragmentsBarthesPredictor(Predictor):
 
             if "question_embeddings" in output:
                 example["question_embedding"] = output["question_embeddings"].tolist()
-
 
         if "retrieved_docs" in output:
             retrieved_docs = output["retrieved_docs"]
@@ -710,7 +704,6 @@ class RagFragmentsBarthesPredictor(Predictor):
 
             example["retrieved_docs"] = retrieved_docs
             # example["predicted_text_greedy"] = output["predicted_text"]
-
 
     def _model_output(self, example):
 

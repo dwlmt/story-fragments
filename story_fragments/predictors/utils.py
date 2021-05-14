@@ -52,9 +52,7 @@ def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size:
 
             else:
                 sentences = [" <PLACEHOLDER> "] * sentence_batch_size + sentences + [" <PLACEHOLDER> "] * (
-                            sentence_batch_size)
-
-            
+                    sentence_batch_size)
 
         sentences = list(more_itertools.windowed(sentences, n=sentence_batch_size + sentence_label_size, fillvalue=" ",
                                                  step=sentence_step_size))

@@ -1,10 +1,8 @@
-from typing import Union, Dict, Any, NamedTuple
-from copy import deepcopy
-
-import os
 import json
-import tempfile
 import logging
+import os
+import tempfile
+from typing import Union, Dict, Any
 
 import torch
 from deepspeed.utils import logger as ds_logger
@@ -13,7 +11,7 @@ ds_logger.setLevel(logging.WARNING)
 ds_logger.propagate = False
 import deepspeed
 
-from allennlp.common import Params, FromParams
+from allennlp.common import FromParams
 
 JsonDict = Dict[str, Any]
 
@@ -25,12 +23,12 @@ class DeepspeedConfig(FromParams):
             fp16: JsonDict = {'enabled': False},
             amp: JsonDict = {'enabled': False},
             zero_optimization: Union[bool, Dict] = False,
-            activation_checkpointing:  Union[Dict] = {'partition_activations': False},
+            activation_checkpointing: Union[Dict] = {'partition_activations': False},
             scheduler: Union[Dict] = {},
             zero_allow_untested_optimizer: bool = True,
             gradient_clipping: float = 1.0,
             fp32_allreduce: bool = True,
-            prescale_gradients: bool =  False,
+            prescale_gradients: bool = False,
             dump_state: bool = True,
             wall_clock_breakdown: bool = True,
     ):
@@ -62,7 +60,6 @@ class DeepspeedConfig(FromParams):
 
     @property
     def config(self):
-
         return vars(self)
 
     def _to_temp_file(self, serialization_dir, **kwargs):

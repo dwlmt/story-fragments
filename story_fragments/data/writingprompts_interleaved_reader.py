@@ -17,6 +17,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
     ''' Interleaved version of WritingPrompts.
 
     '''
+
     def __init__(self,
                  generator_model_name="facebook/bart-base",
                  generator_max_length: int = 128,
@@ -125,7 +126,7 @@ class WritingPromptsInterleavedReader(DatasetReader):
 
         for i, example in enumerate(dataset):
 
-            if self.search_negative_labels :#k_nearest: int = 5,
+            if self.search_negative_labels:  # k_nearest: int = 5,
                 try:
                     label = example["label"]
                     neg_examples = dataset.get_nearest_examples("label", label, k=1 + self.k_nearest).examples['label'][
