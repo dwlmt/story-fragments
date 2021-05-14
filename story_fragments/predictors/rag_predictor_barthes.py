@@ -346,9 +346,9 @@ class RagFragmentsBarthesPredictor(Predictor):
             embeddings_text = []
             for p in passage_batch:
                 if "text_offset" in p:
-                    text = p["text"]
-                else:
                     text = p["text_offset"]
+                else:
+                    text = p["text"]
 
                 embeddings_text.append(text)
 
