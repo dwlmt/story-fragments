@@ -59,7 +59,7 @@ python aligned_salience_processing.py events \
 --output-dir ${SERIAL_DIR} --match-type whole \
 --more-k-diff-similarity 0.05 --plus-minus-percentile 10.0 \
 --min-threshold 0.30 --earliest-k 3 --nearest-k 3 \
---sentence-transformer-name "paraphrase-distilroberta-base-v1"
+--sentence-transformer-name "stsb-roberta-large"
 
 echo "============"
 echo "Salience Extraction Task finished"
