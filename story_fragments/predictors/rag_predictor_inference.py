@@ -1,12 +1,10 @@
 import os
-from random import random, choice
 from typing import List
 
 import more_itertools
 import nltk
-import numpy
 import torch
-from allennlp.common.util import JsonDict, sanitize
+from allennlp.common.util import JsonDict
 from allennlp.data import DatasetReader, Instance
 from allennlp.data.fields import MetadataField, TextField
 from allennlp.data.token_indexers import PretrainedTransformerIndexer
@@ -14,17 +12,13 @@ from allennlp.data.tokenizers import PretrainedTransformerTokenizer
 from allennlp.models import Model
 from allennlp.predictors.predictor import Predictor
 from nltk.sentiment import SentimentIntensityAnalyzer
-from overrides import overrides
-import torch.nn.functional as F
-from scipy.special import kl_div
 from scipy.stats import wasserstein_distance
 from torch import nn
-from transformers import AutoTokenizer
-from blingfire import text_to_sentences
 
 from story_fragments.predictors.utils import input_to_passages
 
 nltk.download('vader_lexicon')
+
 
 def parse_bool(b):
     return b == "True" or b == "TRUE" or b == "true" or b == "1"
@@ -35,6 +29,7 @@ class RagFragmentsInferencePredictor(Predictor):
     """
         Exports the
     """
+
     def __init__(
             self, model: Model,
             dataset_reader: DatasetReader
@@ -72,7 +67,6 @@ class RagFragmentsInferencePredictor(Predictor):
             "tokens": PretrainedTransformerIndexer(model_name=encoder_model_name, max_length=encoder_max_length,
                                                    )}
 
-
         self._cosine_similarity = nn.CosineSimilarity()
         self._l2_distance = nn.PairwiseDistance(p=2)
         self._l1_distance = nn.PairwiseDistance(p=1)
@@ -82,7 +76,7 @@ class RagFragmentsInferencePredictor(Predictor):
         # Hacky flag to stop adding duplicates to memory.
         os.environ['DONT_ADD_TO_MEMORY'] = 'True'
 
-    def predict(self, sentences: List[str] = None,  text: str = None, passage: str = None) -> JsonDict:
+    def predict(self, sentences: List[str] = None, text: str = None, passage: str = None) -> JsonDict:
 
         return self.predict_json({"sentence": sentences, "text": text, "passage": passage})
 
@@ -124,10 +118,10 @@ class RagFragmentsInferencePredictor(Predictor):
 
             results["passages"].append(example)
 
-            #print(f"question_encoder_last_hidden_state: {outputs['question_encoder_last_hidden_state'].size()}")
+            # print(f"question_encoder_last_hidden_state: {outputs['question_encoder_last_hidden_state'].size()}")
 
             if self._add_to_memory:
-                self._model.add_to_memory(example["text"],  add_to_memory=self._add_to_memory)
+                self._model.add_to_memory(example["text"], add_to_memory=self._add_to_memory)
 
         for i, (first, second) in enumerate(more_itertools.pairwise(model_outputs_list)):
 
@@ -147,13 +141,13 @@ class RagFragmentsInferencePredictor(Predictor):
                 if len(y.size()) < len(x.size()):
                     y = torch.unsqueeze(y, dim=0).expand_as(x)
 
-                #norm = numpy.linalg.norm(x, ord=2)
-                #x = x / norm
+                # norm = numpy.linalg.norm(x, ord=2)
+                # x = x / norm
 
-                #norm = numpy.linalg.norm(y, ord=2)
-                #y = y / norm
+                # norm = numpy.linalg.norm(y, ord=2)
+                # y = y / norm
 
-                #print(f"Normalized: {x}, {y}")
+                # print(f"Normalized: {x}, {y}")
 
                 l1_dist = self._l1_distance(x, y)
                 l2_dist = self._l2_distance(x, y)
@@ -167,8 +161,7 @@ class RagFragmentsInferencePredictor(Predictor):
                 res_dict[f"{name}_dot_product"] = dot_product.item()
                 res_dict[f"{name}_wasserstein_dist"] = wass_dist
 
-                return  res_dict
-
+                return res_dict
 
             first_doc_emb = torch.tensor(first["retrieved_doc_embeddings"])
             second_doc_emb = torch.tensor(second["retrieved_doc_embeddings"])
@@ -178,7 +171,7 @@ class RagFragmentsInferencePredictor(Predictor):
             first_doc_emb = torch.tensor(first["generator_enc_embeddings"])
             second_doc_emb = torch.tensor(second["generator_enc_embeddings"])
             metrics = vector_distance_metrics("generator_enc_embedding", first_doc_emb, second_doc_emb)
-            results["passages"][i]["prediction_metrics"] = {**metrics,**results["passages"][i]["prediction_metrics"]}
+            results["passages"][i]["prediction_metrics"] = {**metrics, **results["passages"][i]["prediction_metrics"]}
 
             first_doc_emb = torch.tensor(first["generator_dec_embeddings"])
             second_doc_emb = torch.tensor(second["generator_dec_embeddings"])
@@ -199,7 +192,7 @@ class RagFragmentsInferencePredictor(Predictor):
         fields = {}
 
         fields["metadata"] = MetadataField(example)
-        #logger.info(f"Example: {example}")
+        # logger.info(f"Example: {example}")
 
         tokens = self.encoder_tokenizer.tokenize(example['text'])
 

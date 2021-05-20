@@ -8,25 +8,30 @@ import traceback
 from contextlib import contextmanager
 from typing import Any, Dict, Iterator, List, Optional, Tuple, Union
 
+from allennlp.common.util import int_to_device
+
 import torch
-# import deepspeed
 import torch.distributed as dist
-from allennlp.common import Lazy, Tqdm
+from torch.cuda import amp
+import torch.optim.lr_scheduler
+from torch.nn.parallel import DistributedDataParallel
+from torch.nn.utils import clip_grad_norm_
+
+from allennlp.common import Lazy, Registrable, Tqdm
 from allennlp.common import util as common_util
 from allennlp.common.checks import ConfigurationError, check_for_gpu
-from allennlp.data import DataLoader
-from allennlp.data.dataloader import TensorDict
+from allennlp.data import DataLoader, TensorDict
+from allennlp.training import Trainer, TrainerCallback
 from allennlp.models.model import Model
-from allennlp.nn import util as nn_util
 from allennlp.training import util as training_util
 from allennlp.training.checkpointer import Checkpointer
+from allennlp.training.learning_rate_schedulers import LearningRateScheduler
 from allennlp.training.metric_tracker import MetricTracker
+from allennlp.training.momentum_schedulers import MomentumScheduler
 from allennlp.training.moving_average import MovingAverage
 from allennlp.training.optimizers import Optimizer
-from allennlp.training.tensorboard_writer import TensorboardWriter
-from allennlp.training.trainer import Trainer, BatchCallback, EpochCallback
-from torch.cuda import amp
-from torch.cuda.amp import autocast
+
+logger = logging.getLogger(__name__)
 
 from story_fragments.training.deepspeed_utils import DeepspeedConfig
 
@@ -35,34 +40,31 @@ logger = logging.getLogger(__name__)
 
 @Trainer.register("deepspeed", constructor="from_partial_objects")
 class DeepspeedTrainer(Trainer):
-    ''' Deepspeed trainer from https://github.com/jacobdanovitch/allennlp_deepspeed/blob/master/allennlp_deepspeed/
-
-    '''
 
     def __init__(
-            self,
-            model: Model,
-            optimizer: torch.optim.Optimizer,
-            data_loader: DataLoader,
-            deepspeed_config: DeepspeedConfig,
-            patience: Optional[int] = None,
-            validation_metric: str = "-loss",
-            validation_data_loader: DataLoader = None,
-            num_epochs: int = 20,
-            serialization_dir: Optional[str] = None,
-            checkpointer: Checkpointer = None,
-            cuda_device: Optional[Union[int, torch.device]] = None,
-            grad_norm: Optional[float] = None,
-            grad_clipping: Optional[float] = None,
-            tensorboard_writer: TensorboardWriter = None,
-            moving_average: Optional[MovingAverage] = None,
-            batch_callbacks: List[BatchCallback] = None,
-            epoch_callbacks: List[EpochCallback] = None,
-            distributed: bool = False,
-            local_rank: int = -0,
-            world_size: int = 1,
-            num_gradient_accumulation_steps: int = 1,
-            use_amp: bool = False,
+        self,
+        model: Model,
+        optimizer: torch.optim.Optimizer,
+        data_loader: DataLoader,
+        deepspeed_config: DeepspeedConfig,
+        patience: Optional[int] = None,
+        validation_metric: Union[str, List[str]] = "-loss",
+        validation_data_loader: DataLoader = None,
+        num_epochs: int = 20,
+        serialization_dir: Optional[str] = None,
+        checkpointer: Checkpointer = None,
+        cuda_device: Optional[Union[int, torch.device]] = None,
+        grad_norm: Optional[float] = None,
+        grad_clipping: Optional[float] = None,
+        learning_rate_scheduler: Optional[LearningRateScheduler] = None,
+        momentum_scheduler: Optional[MomentumScheduler] = None,
+        moving_average: Optional[MovingAverage] = None,
+        callbacks: List[TrainerCallback] = None,
+        distributed: bool = False,
+        local_rank: int = 0,
+        world_size: int = 1,
+        num_gradient_accumulation_steps: int = 1,
+        use_amp: bool = False,
     ) -> None:
         super().__init__(serialization_dir, cuda_device, distributed, local_rank, world_size)
 
@@ -71,7 +73,10 @@ class DeepspeedTrainer(Trainer):
         self.model = model
 
         self.data_loader = data_loader
+        self.data_loader.set_target_device(self.cuda_device)
         self._validation_data_loader = validation_data_loader
+        if self._validation_data_loader is not None:
+            self._validation_data_loader.set_target_device(self.cuda_device)
         self.optimizer = optimizer
 
         if patience is None:  # no early stopping
@@ -87,32 +92,27 @@ class DeepspeedTrainer(Trainer):
             )
 
         # For tracking is_best_so_far and should_stop_early
-        self._metric_tracker = MetricTracker(patience, validation_metric)
-        # Get rid of + or -
-        self._validation_metric = validation_metric[1:]
+        self._metric_tracker = MetricTracker(validation_metric, patience)
 
         self._num_epochs = num_epochs
 
-        if checkpointer is not None:
-            self._checkpointer = checkpointer
-        else:
+        self._checkpointer: Optional[Checkpointer] = checkpointer
+        if checkpointer is None and serialization_dir is not None:
             self._checkpointer = Checkpointer(serialization_dir)
 
         self._grad_norm = grad_norm
         self._grad_clipping = grad_clipping
 
+        self._learning_rate_scheduler = learning_rate_scheduler
+        self._momentum_scheduler = momentum_scheduler
         self._moving_average = moving_average
-        self._batch_callbacks = batch_callbacks or []
-        self._epoch_callbacks = epoch_callbacks or []
+
+        self._callbacks = callbacks or []
 
         # We keep the total batch number as an instance variable because it
         # is used inside a closure for the hook which logs activations in
         # `_enable_activation_logging`.
         self._batch_num_total = 0
-
-        self._tensorboard = tensorboard_writer or TensorboardWriter(serialization_dir)
-        self._tensorboard.get_batch_num_total = lambda: self._batch_num_total
-        self._tensorboard.enable_activation_logging(self.model)
 
         self._last_log = 0.0  # time of last logging
 
@@ -126,15 +126,23 @@ class DeepspeedTrainer(Trainer):
                 raise ValueError("Using AMP requires a cuda device")
             self._scaler = amp.GradScaler()
 
-        self._pytorch_model = self.model
+        # Using `DistributedDataParallel`(ddp) brings in a quirk wrt AllenNLP's `Model` interface and its
+        # usage. A `Model` object is wrapped by `ddp`, but assigning the wrapped model to `self.model`
+        # will break the usages such as `Model.get_regularization_penalty`, `Model.get_metrics`, etc.
+        #
+        # Hence a reference to Pytorch's object is maintained in the case of distributed training and in the
+        # normal case, reference to `Model` is retained. This reference is only used in
+        # these places: `model.__call__`, `model.train` and `model.eval`.
+        if self._distributed:
+            self._pytorch_model = DistributedDataParallel(
+                self.model,
+                device_ids=None if self.cuda_device == torch.device("cpu") else [self.cuda_device],
+                find_unused_parameters=True,
+            )
+        else:
+            self._pytorch_model = self.model
 
         self._ds_config = deepspeed_config
-
-        os.environ["LOCAL_RANK"] = f"{local_rank}"
-
-        # model = self.model.cpu()
-        # with deepspeed.zero.Init():
-
         self.model_engine, self.ds_optimizer, _, _ = self._ds_config.launch(
             self.model,
             None,  # self.optimizer,
@@ -144,16 +152,28 @@ class DeepspeedTrainer(Trainer):
             num_gradient_accumulation_steps
         )
 
+    def rescale_gradients(self) -> float:
+        """
+        Performs gradient rescaling. Is a no-op if gradient rescaling is not enabled.
+        Returns the norm of the gradients.
+        """
+        parameters_to_clip = [p for p in self.model.parameters() if p.grad is not None]
+        if self._grad_norm:
+            if self._scaler is not None:
+                # Need to first unscale gradients in order to clip as usual.
+                self._scaler.unscale_(self.optimizer)
+            return clip_grad_norm_(parameters_to_clip, self._grad_norm)
+        else:
+            return torch.norm(
+                torch.stack([torch.norm(p.grad.detach()) for p in parameters_to_clip])
+            )
+
     def batch_outputs(self, batch: TensorDict, for_training: bool) -> Dict[str, torch.Tensor]:
         """
         Does a forward pass on the given batch and returns the output dictionary that the model
         returns, after adding any specified regularization penalty to the loss (if training).
         """
-        # batch = nn_util.move_to_device(batch, self.cuda_device)
-        batch = nn_util.move_to_device(batch, self.model_engine.device)
         output_dict = self.model_engine(**batch)
-
-        print(output_dict)
 
         if for_training:
             try:
@@ -181,24 +201,21 @@ class DeepspeedTrainer(Trainer):
         cpu_memory_usage = []
         for worker, memory in common_util.peak_cpu_memory().items():
             cpu_memory_usage.append((worker, memory))
-            logger.info(f"Worker {worker} memory usage MB: {memory}")
+            logger.info(f"Worker {worker} memory usage: {common_util.format_size(memory)}")
         gpu_memory_usage = []
         for gpu, memory in common_util.peak_gpu_memory().items():
             gpu_memory_usage.append((gpu, memory))
-            logger.info(f"GPU {gpu} memory usage MB: {memory}")
+            logger.info(f"GPU {gpu} memory usage: {common_util.format_size(memory)}")
 
         regularization_penalty = self.model.get_regularization_penalty()
 
         train_loss = 0.0
         batch_loss = 0.0
+        train_reg_loss = None if regularization_penalty is None else 0.0
+        batch_reg_loss = None if regularization_penalty is None else 0.0
 
-        if regularization_penalty is not None:
-            train_reg_loss = 0.0
-            batch_reg_loss = 0.0
-        else:
-            train_reg_loss = None
-            batch_reg_loss = None
         # Set the model to "train" mode.
+        #self._pytorch_model.train()
         self.model_engine.train()
 
         # Get tqdm for the training batches
@@ -218,13 +235,14 @@ class DeepspeedTrainer(Trainer):
         except TypeError:
             num_training_batches = float("inf")
 
-        # Having multiple tqdm bars in case of distributed training will be a mess. Hence only the master's
+        # Having multiple tqdm bars in case of distributed training will be a mess. Hence only the primary's
         # progress is shown
-        batch_group_generator_tqdm = batch_group_generator
-        if self._master:
+        if self._primary:
             batch_group_generator_tqdm = Tqdm.tqdm(
                 batch_group_generator, total=num_training_batches
             )
+        else:
+            batch_group_generator_tqdm = batch_group_generator
 
         self._last_log = time.time()
 
@@ -234,60 +252,67 @@ class DeepspeedTrainer(Trainer):
 
         done_early = False
         for batch_group in batch_group_generator_tqdm:
+            if self._distributed:
+                # Check whether the other workers have stopped already (due to differing amounts of
+                # data in each). If so, we can't proceed because we would hang when we hit the
+                # barrier implicit in Model.forward. We use a IntTensor instead a BoolTensor
+                # here because NCCL process groups apparently don't support BoolTensor.
+                done = torch.tensor(0, device=self.cuda_device)
+                torch.distributed.all_reduce(done, torch.distributed.ReduceOp.SUM)
+                if done.item() > 0:
+                    done_early = True
+                    logger.warning(
+                        f"Worker {torch.distributed.get_rank()} finishing training early! "
+                        "This implies that there is an imbalance in your training "
+                        "data across the workers and that some amount of it will be "
+                        "ignored. A small amount of this is fine, but a major imbalance "
+                        "should be avoided. Note: This warning will appear unless your "
+                        "data is perfectly balanced."
+                    )
+                    break
+
             batches_this_epoch += 1
             self._batch_num_total += 1
             batch_num_total = self._batch_num_total
 
-            self.optimizer.zero_grad()
+            # Zero gradients.
+            # NOTE: this is actually more efficient than calling `self.optimizer.zero_grad()`
+            # because it avoids a read op when the gradients are first updated below.
+            for param_group in self.optimizer.param_groups:
+                for p in param_group["params"]:
+                    p.grad = None
 
+            batch_loss = 0.0
             batch_group_outputs = []
             for batch in batch_group:
-                with autocast(self._use_amp):
+                with amp.autocast(self._use_amp):
                     batch_outputs = self.batch_outputs(batch, for_training=True)
                     batch_group_outputs.append(batch_outputs)
-                    loss = batch_outputs.get("loss")
-
+                    loss = batch_outputs["loss"]
                     reg_loss = batch_outputs.get("reg_loss")
-                    # print("Loss", loss.float())
                     if torch.isnan(loss):
                         raise ValueError("nan loss encountered")
                     loss = loss / len(batch_group)
 
-                    batch_loss = loss.item()
-                    train_loss += batch_loss
+                    batch_loss += loss.item()
                     if reg_loss is not None:
                         reg_loss = reg_loss / len(batch_group)
                         batch_reg_loss = reg_loss.item()
-                        train_reg_loss += batch_reg_loss
+                        train_reg_loss += batch_reg_loss  # type: ignore
 
                 self.model_engine.backward(loss)
                 self.model_engine.step()
 
-            param_updates = None
-            if self._tensorboard.should_log_histograms_this_batch() and self._master:
-                # Get the magnitude of parameter updates for logging.  We need to do some
-                # computation before and after the optimizer step, and it's expensive because of
-                # GPU/CPU copies (necessary for large models, and for shipping to tensorboard), so
-                # we don't do this every batch, only when it's requested.
-                param_updates = {
-                    name: param.detach().cpu().clone()
-                    for name, param in self.model.named_parameters()
-                }
+            train_loss += batch_loss
 
-                if self._scaler is not None:
-                    self._scaler.step(self.optimizer)
-                    self._scaler.update()
-                else:
-                    self.optimizer.step()
+            #batch_grad_norm = self.rescale_gradients()
 
-                for name, param in self.model.named_parameters():
-                    param_updates[name].sub_(param.detach().cpu())
-            else:
-                if self._scaler is not None:
-                    self._scaler.step(self.optimizer)
-                    self._scaler.update()
-                else:
-                    self.optimizer.step()
+            # This does nothing if batch_num_total is None or you are using a
+            # scheduler which doesn't update per batch.
+            if self._learning_rate_scheduler:
+                self._learning_rate_scheduler.step_batch(batch_num_total)
+            if self._momentum_scheduler:
+                self._momentum_scheduler.step_batch(batch_num_total)
 
             # Update moving averages
             if self._moving_average is not None:
@@ -305,31 +330,40 @@ class DeepspeedTrainer(Trainer):
                 cuda_device=self.cuda_device,
             )
 
-            if self._master:
-                # Updating tqdm only for the master as the training wouldn't have one
+            if self._primary:
+                # Updating tqdm only for the primary as the trainers wouldn't have one
                 description = training_util.description_from_metrics(metrics)
                 batch_group_generator_tqdm.set_description(description, refresh=False)
-                self._tensorboard.log_batch(
-                    self.model,
-                    self.optimizer,
-                    0.,  # batch_grad_norm,
-                    metrics,
-                    batch_group,
-                    param_updates,
-                )
 
-                self._checkpointer.maybe_save_checkpoint(self, epoch, batches_this_epoch)
+                if self._checkpointer is not None:
+                    self._checkpointer.maybe_save_checkpoint(self, epoch, batches_this_epoch)
 
-            for callback in self._batch_callbacks:
-                callback(
+            for callback in self._callbacks:
+                callback.on_batch(
                     self,
                     batch_group,
                     batch_group_outputs,
+                    metrics,
                     epoch,
                     batches_this_epoch,
                     is_training=True,
-                    is_master=self._master,
+                    is_primary=self._primary,
+                    batch_grad_norm=None#batch_grad_norm,
                 )
+
+        if self._distributed and not done_early:
+            logger.warning(
+                f"Worker {torch.distributed.get_rank()} completed its entire epoch (training)."
+            )
+            # Indicate that we're done so that any workers that have remaining data stop the epoch early.
+            done = torch.tensor(1, device=self.cuda_device)
+            torch.distributed.all_reduce(done, torch.distributed.ReduceOp.SUM)
+            assert done.item()
+
+        # Let all workers finish their epoch before computing
+        # the final statistics for the epoch.
+        if self._distributed:
+            dist.barrier()
 
         metrics = training_util.get_metrics(
             self.model,
@@ -344,12 +378,12 @@ class DeepspeedTrainer(Trainer):
         )
 
         for (worker, memory) in cpu_memory_usage:
-            metrics["worker_" + str(worker) + "_memory_MB"] = memory
+            metrics["worker_" + str(worker) + "_memory_MB"] = memory / (1024 * 1024)
         for (gpu_num, memory) in gpu_memory_usage:
-            metrics["gpu_" + str(gpu_num) + "_memory_MB"] = memory
+            metrics["gpu_" + str(gpu_num) + "_memory_MB"] = memory / (1024 * 1024)
         return metrics
 
-    def _validation_loss(self, epoch: int) -> Tuple[float, float, int]:
+    def _validation_loss(self, epoch: int) -> Tuple[float, Optional[float], int]:
         """
         Computes the validation loss. Returns it and the number of batches.
         """
@@ -370,22 +404,18 @@ class DeepspeedTrainer(Trainer):
 
         regularization_penalty = self.model.get_regularization_penalty()
 
-        # Having multiple tqdm bars in case of distributed training will be a mess. Hence only the master's
+        # Having multiple tqdm bars in case of distributed training will be a mess. Hence only the primary's
         # progress is shown
-        if self._master:
+        if self._primary:
             val_generator_tqdm = Tqdm.tqdm(validation_data_loader)
         else:
             val_generator_tqdm = validation_data_loader
 
         batches_this_epoch = 0
-        val_loss = 0
-        val_batch_loss = 0
-        if regularization_penalty is not None:
-            val_reg_loss = 0
-            val_batch_reg_loss = 0
-        else:
-            val_reg_loss = None
-            val_batch_reg_loss = None
+        val_loss = 0.0
+        val_batch_loss = 0.0
+        val_reg_loss = None if regularization_penalty is None else 0.0
+        val_batch_reg_loss = None if regularization_penalty is None else 0.0
         done_early = False
         for batch in val_generator_tqdm:
             if self._distributed:
@@ -410,7 +440,6 @@ class DeepspeedTrainer(Trainer):
             with amp.autocast(self._use_amp):
                 batch_outputs = self.batch_outputs(batch, for_training=False)
                 loss = batch_outputs.get("loss")
-
                 reg_loss = batch_outputs.get("reg_loss")
                 if loss is not None:
                     # You shouldn't necessarily have to compute a loss for validation, so we allow for
@@ -419,11 +448,11 @@ class DeepspeedTrainer(Trainer):
                     # count those batches for which we actually have a loss.  If this variable ever
                     # gets used for something else, we might need to change things around a bit.
                     batches_this_epoch += 1
-                    val_batch_loss = loss.detach().cpu().numpy()
+                    val_batch_loss = loss.item()
                     val_loss += val_batch_loss
                     if reg_loss is not None:
-                        val_batch_reg_loss = reg_loss.detach().cpu().numpy()
-                        val_reg_loss += val_batch_reg_loss
+                        val_batch_reg_loss = reg_loss.item()
+                        val_reg_loss += val_batch_reg_loss  # type: ignore
 
             # Update the description with the latest metrics
             val_metrics = training_util.get_metrics(
@@ -438,18 +467,19 @@ class DeepspeedTrainer(Trainer):
             )
 
             description = training_util.description_from_metrics(val_metrics)
-            if self._master:
+            if self._primary:
                 val_generator_tqdm.set_description(description, refresh=False)
 
-            for callback in self._batch_callbacks:
-                callback(
+            for callback in self._callbacks:
+                callback.on_batch(
                     self,
                     [batch],
                     [batch_outputs],
+                    val_metrics,
                     epoch,
                     batches_this_epoch,
                     is_training=False,
-                    is_master=self._master,
+                    is_primary=self._primary,
                 )
 
         if self._distributed and not done_early:
@@ -471,6 +501,22 @@ class DeepspeedTrainer(Trainer):
         """
         Trains the supplied model with the supplied parameters.
         """
+
+        for callback in self._callbacks:
+            callback.on_start(self, is_primary=self._primary)
+
+        # Set default values in case of failure
+        epoch = None
+        metrics = None
+
+        try:
+            metrics, epoch = self._try_train()
+            return metrics
+        finally:
+            for callback in self._callbacks:
+                callback.on_end(self, metrics=metrics, epoch=epoch, is_primary=self._primary)
+
+    def _try_train(self) -> Tuple[Dict[str, Any], int]:
         try:
             epoch_counter = self._restore_checkpoint()
         except RuntimeError:
@@ -486,7 +532,6 @@ class DeepspeedTrainer(Trainer):
         logger.info("Beginning training.")
 
         val_metrics: Dict[str, float] = {}
-        this_epoch_val_metric: float = None
         metrics: Dict[str, Any] = {}
         epochs_trained = 0
         training_start_time = time.time()
@@ -495,12 +540,16 @@ class DeepspeedTrainer(Trainer):
         for key, value in self._metric_tracker.best_epoch_metrics.items():
             metrics["best_validation_" + key] = value
 
-        for callback in self._epoch_callbacks:
-            callback(self, metrics={}, epoch=-1, is_master=self._master)
-
         for epoch in range(epoch_counter, self._num_epochs):
             epoch_start_time = time.time()
             train_metrics = self._train_epoch(epoch)
+
+            if self._primary and self._checkpointer is not None:
+                self._checkpointer.save_checkpoint(epoch, self, save_model_only=True)
+
+            # Wait for the primary process to finish saving the model checkpoint
+            if self._distributed:
+                dist.barrier()
 
             # get peak of memory usage
             for key, value in train_metrics.items():
@@ -509,6 +558,7 @@ class DeepspeedTrainer(Trainer):
                 elif key.startswith("worker_") and key.endswith("_memory_MB"):
                     metrics["peak_" + key] = max(metrics.get("peak_" + key, 0), value)
 
+            this_epoch_val_metric: float = 0.0
             if self._validation_data_loader is not None:
                 with torch.no_grad():
                     # We have a validation set, so compute all the metrics on it.
@@ -532,17 +582,11 @@ class DeepspeedTrainer(Trainer):
                     )
 
                     # Check validation metric for early stopping
-                    this_epoch_val_metric = val_metrics[self._validation_metric]
-                    self._metric_tracker.add_metric(this_epoch_val_metric)
-
+                    this_epoch_val_metric = self._metric_tracker.combined_score(val_metrics)
+                    self._metric_tracker.add_metrics(val_metrics)
                     if self._metric_tracker.should_stop_early():
                         logger.info("Ran out of patience.  Stopping training.")
                         break
-
-            if self._master:
-                self._tensorboard.log_metrics(
-                    train_metrics, val_metrics=val_metrics, log_to_console=True, epoch=epoch + 1
-                )  # +1 because tensorboard doesn't like 0
 
             # Create overall metrics dict
             training_elapsed_time = time.time() - training_start_time
@@ -565,22 +609,30 @@ class DeepspeedTrainer(Trainer):
 
                 self._metric_tracker.best_epoch_metrics = val_metrics
 
-            if self._serialization_dir and self._master:
+            if self._serialization_dir and self._primary:
                 common_util.dump_metrics(
-                    os.path.join(self._serialization_dir, f"metrics_epoch_{epoch}.json"), metrics
+                    os.path.join(self._serialization_dir, f"metrics_epoch_{epoch}.json"),
+                    metrics,
                 )
 
-            if self._master:
+            # The Scheduler API is agnostic to whether your schedule requires a validation metric -
+            # if it doesn't, the validation metric passed here is ignored.
+            if self._learning_rate_scheduler:
+                self._learning_rate_scheduler.step(this_epoch_val_metric)
+            if self._momentum_scheduler:
+                self._momentum_scheduler.step(this_epoch_val_metric)
+
+            if self._primary and self._checkpointer is not None:
                 self._checkpointer.save_checkpoint(
                     epoch, self, is_best_so_far=self._metric_tracker.is_best_so_far()
                 )
 
-            # Wait for the master to finish saving the checkpoint
+            # Wait for the primary process to finish saving the checkpoint
             if self._distributed:
                 dist.barrier()
 
-            for callback in self._epoch_callbacks:
-                callback(self, metrics=metrics, epoch=epoch, is_master=self._master)
+            for callback in self._callbacks:
+                callback.on_epoch(self, metrics=metrics, epoch=epoch, is_primary=self._primary)
 
             epoch_elapsed_time = time.time() - epoch_start_time
             logger.info("Epoch duration: %s", datetime.timedelta(seconds=epoch_elapsed_time))
@@ -588,23 +640,25 @@ class DeepspeedTrainer(Trainer):
             if epoch < self._num_epochs - 1:
                 training_elapsed_time = time.time() - training_start_time
                 estimated_time_remaining = training_elapsed_time * (
-                        (self._num_epochs - epoch_counter) / float(epoch - epoch_counter + 1) - 1
+                    (self._num_epochs - epoch_counter) / float(epoch - epoch_counter + 1) - 1
                 )
                 formatted_time = str(datetime.timedelta(seconds=int(estimated_time_remaining)))
                 logger.info("Estimated training time remaining: %s", formatted_time)
 
             epochs_trained += 1
-
-        # make sure pending events are flushed to disk and files are closed properly
-        self._tensorboard.close()
-        del self.model_engine
+        else:
+            epoch = self._num_epochs - 1
 
         # Load the best model state before returning
-        best_model_state = self._checkpointer.best_model_state()
+        best_model_state = (
+            None if self._checkpointer is None else self._checkpointer.best_model_state()
+        )
         if best_model_state:
             self.model.load_state_dict(best_model_state)
 
-        return metrics
+        del self.model_engine
+
+        return metrics, epoch
 
     @contextmanager
     def get_checkpoint_state(self) -> Iterator[Tuple[Dict[str, Any], Dict[str, Any]]]:
@@ -621,6 +675,12 @@ class DeepspeedTrainer(Trainer):
             "optimizer": self.optimizer.state_dict(),
             "batch_num_total": self._batch_num_total,
         }
+
+        # If we have a learning rate or momentum scheduler, we should persist them too.
+        if self._learning_rate_scheduler is not None:
+            training_states["learning_rate_scheduler"] = self._learning_rate_scheduler.state_dict()
+        if self._momentum_scheduler is not None:
+            training_states["momentum_scheduler"] = self._momentum_scheduler.state_dict()
 
         try:
             yield model_state, training_states
@@ -643,6 +703,9 @@ class DeepspeedTrainer(Trainer):
             The epoch at which to resume training, which should be one after the epoch
             in the saved training state.
         """
+        if self._checkpointer is None:
+            return 0
+
         model_state, training_state = self._checkpointer.restore_checkpoint()
 
         if not training_state:
@@ -651,16 +714,18 @@ class DeepspeedTrainer(Trainer):
 
         self.model.load_state_dict(model_state)
         self.optimizer.load_state_dict(training_state["optimizer"])
+        if (
+            self._learning_rate_scheduler is not None
+            and "learning_rate_scheduler" in training_state
+        ):
+            self._learning_rate_scheduler.load_state_dict(training_state["learning_rate_scheduler"])
+        if self._momentum_scheduler is not None and "momentum_scheduler" in training_state:
+            self._momentum_scheduler.load_state_dict(training_state["momentum_scheduler"])
         training_util.move_optimizer_to_cuda(self.optimizer)
 
         # Currently the `training_state` contains a serialized `MetricTracker`.
         if "metric_tracker" in training_state:
             self._metric_tracker.load_state_dict(training_state["metric_tracker"])
-        # It used to be the case that we tracked `val_metric_per_epoch`.
-        elif "val_metric_per_epoch" in training_state:
-            self._metric_tracker.clear()
-            self._metric_tracker.add_metrics(training_state["val_metric_per_epoch"])
-        # And before that we didn't track anything.
         else:
             self._metric_tracker.clear()
 
@@ -679,30 +744,31 @@ class DeepspeedTrainer(Trainer):
 
     @classmethod
     def from_partial_objects(
-            cls,
-            model: Model,
-            serialization_dir: str,
-            data_loader: DataLoader,
-            validation_data_loader: DataLoader = None,
-            local_rank: int = 0,
-            patience: int = None,
-            validation_metric: str = "-loss",
-            num_epochs: int = 20,
-            cuda_device: Optional[Union[int, torch.device]] = None,
-            grad_norm: float = None,
-            grad_clipping: float = None,
-            distributed: bool = None,
-            world_size: int = 1,
-            num_gradient_accumulation_steps: int = 1,
-            use_amp: bool = False,
-            no_grad: List[str] = None,
-            optimizer: Lazy[Optimizer] = None,
-            tensorboard_writer: Lazy[TensorboardWriter] = None,
-            moving_average: Lazy[MovingAverage] = None,
-            checkpointer: Lazy[Checkpointer] = None,
-            batch_callbacks: List[BatchCallback] = None,
-            epoch_callbacks: List[EpochCallback] = None,
-            deepspeed_config: DeepspeedConfig = None
+        cls,
+        model: Model,
+        serialization_dir: str,
+        data_loader: DataLoader,
+        validation_data_loader: DataLoader = None,
+        local_rank: int = 0,
+        patience: int = None,
+        validation_metric: Union[str, List[str]] = "-loss",
+        num_epochs: int = 20,
+        cuda_device: Optional[Union[int, torch.device]] = None,
+        grad_norm: float = None,
+        grad_clipping: float = None,
+        distributed: bool = False,
+        world_size: int = 1,
+        num_gradient_accumulation_steps: int = 1,
+        use_amp: bool = False,
+        no_grad: List[str] = None,
+        optimizer: Lazy[Optimizer] = Lazy(Optimizer.default),
+        learning_rate_scheduler: Lazy[LearningRateScheduler] = None,
+        momentum_scheduler: Lazy[MomentumScheduler] = None,
+        moving_average: Lazy[MovingAverage] = None,
+        checkpointer: Lazy[Checkpointer] = Lazy(Checkpointer),
+        callbacks: List[Lazy[TrainerCallback]] = None,
+        trainer_callbacks: List[Lazy[TrainerCallback]] = None,
+        deepspeed_config: DeepspeedConfig = None
     ) -> "Trainer":
         """
         This method exists so that we can have a documented method to construct this class using
@@ -738,8 +804,6 @@ class DeepspeedTrainer(Trainer):
 
         parameters = [[n, p] for n, p in model.named_parameters() if p.requires_grad]
         optimizer_ = optimizer.construct(model_parameters=parameters)
-        if not optimizer_:
-            optimizer_ = Optimizer.default(parameters)
 
         common_util.log_frozen_and_tunable_parameter_names(model)
 
@@ -753,10 +817,27 @@ class DeepspeedTrainer(Trainer):
         moving_average_ = (
             None if moving_average is None else moving_average.construct(parameters=parameters)
         )
+        learning_rate_scheduler_ = (
+            None
+            if learning_rate_scheduler is None
+            else learning_rate_scheduler.construct(
+                optimizer=optimizer_, num_epochs=num_epochs, num_steps_per_epoch=batches_per_epoch
+            )
+        )
+        momentum_scheduler_ = (
+            None
+            if momentum_scheduler is None
+            else momentum_scheduler.construct(optimizer=optimizer_)
+        )
+        checkpointer_ = checkpointer.construct(serialization_dir=serialization_dir)
 
-        checkpointer_ = checkpointer.construct() if checkpointer is not None else Checkpointer(serialization_dir)
-        tensorboard_writer_ = tensorboard_writer.construct() if tensorboard_writer is not None else TensorboardWriter(
-            serialization_dir)
+        callbacks = callbacks or trainer_callbacks or []
+
+        callbacks_: List[TrainerCallback] = []
+
+        for callback in callbacks:
+            callback_ = callback.construct(serialization_dir=serialization_dir)
+            callbacks_.append(callback_)
 
         return cls(
             model,
@@ -770,11 +851,11 @@ class DeepspeedTrainer(Trainer):
             cuda_device=cuda_device,
             grad_norm=grad_norm,
             grad_clipping=grad_clipping,
-            tensorboard_writer=tensorboard_writer_,
+            learning_rate_scheduler=learning_rate_scheduler_,
+            momentum_scheduler=momentum_scheduler_,
             checkpointer=checkpointer_,
             moving_average=moving_average_,
-            batch_callbacks=batch_callbacks,
-            epoch_callbacks=epoch_callbacks,
+            callbacks=callbacks_,
             distributed=distributed,
             local_rank=local_rank,
             world_size=world_size,

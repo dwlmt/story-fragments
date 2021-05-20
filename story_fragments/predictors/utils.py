@@ -7,7 +7,8 @@ _RE_COMBINE_WHITESPACE = re.compile(r"\s+")
 
 
 def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size: int = 6,
-                      sentence_step_size: int = 6, max_passages: int = None, prefill: bool = False):
+                      sentence_step_size: int = 6, max_passages: int = None, prefill: bool = False,
+                      previous_text=None):
     labels = []
 
     # print(f"Inputs: {inputs}")
@@ -43,8 +44,15 @@ def input_to_passages(inputs, sentence_batch_size: int = 6, sentence_label_size:
 
         # Need to prefill with blank sentences to support a sliding window.
         if prefill:
-            sentences = [" <PLACEHOLDER> "] * sentence_batch_size + sentences + [" <PLACEHOLDER> "] * (
-                        sentence_batch_size)
+
+            if previous_text:
+
+                sentences = previous_text[-sentence_batch_size] + sentences + [" <PLACEHOLDER> "] * (
+                    sentence_batch_size)
+
+            else:
+                sentences = [" <PLACEHOLDER> "] * sentence_batch_size + sentences + [" <PLACEHOLDER> "] * (
+                    sentence_batch_size)
 
         sentences = list(more_itertools.windowed(sentences, n=sentence_batch_size + sentence_label_size, fillvalue=" ",
                                                  step=sentence_step_size))

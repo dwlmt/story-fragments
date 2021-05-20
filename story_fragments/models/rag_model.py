@@ -1,12 +1,10 @@
 import logging
-from collections import deque
 from typing import Dict, Any, List, Union
 
 import numpy
 import torch
 from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
-from allennlp.training.metrics import Perplexity, CategoricalAccuracy
 from transformers import AutoTokenizer
 
 from story_fragments.modules.memory_model import RagMemoryTokenForGeneration
@@ -126,7 +124,7 @@ class RagFragmentsModel(Model):
                 dataset: List[str] = None,
                 ) -> Dict[str, torch.Tensor]:
 
-        #logger.debug(f"Input: {metadata}")
+        # logger.debug(f"Input: {metadata}")
 
         results = {}
 
@@ -169,11 +167,11 @@ class RagFragmentsModel(Model):
                                       labels=label_tokens,
                                       output_retrieved=True,
                                       output_hidden_states=True,
-                                      n_docs = rag_ndocs
-                                      #output_attentions=True,
+                                      n_docs=rag_ndocs
+                                      # output_attentions=True,
                                       )
         else:
-            doc_scores = torch.ones(input_ids.size()[0],1).to(input_ids.device)
+            doc_scores = torch.ones(input_ids.size()[0], 1).to(input_ids.device)
 
             model_output = self.model(context_input_ids=input_ids,
                                       context_attention_mask=input_mask,
@@ -192,19 +190,18 @@ class RagFragmentsModel(Model):
         label_mask = labels["tokens"]['mask']
 
         if not self.training:
-
             with torch.no_grad():
-
                 # self._update_metrics(model_output, label_tokens, label_mask)
                 self._add_retrieval_info(model_output, label_tokens, results)
 
-                #print(f"Output: {model_output}")
+                # print(f"Output: {model_output}")
 
-                self._process_embeddings_and_metrics(batch_size, rag_ndocs, input_mask, label_mask, model_output, results)
+                self._process_embeddings_and_metrics(batch_size, rag_ndocs, input_mask, label_mask, model_output,
+                                                     results)
 
         results["input"] = metadata
 
-        #logger.debug(f"Results: {results}")
+        # logger.debug(f"Results: {results}")
         return results
 
     def _process_embeddings_and_metrics(self, batch_size, rag_ndocs, input_mask, label_mask, model_output, results):
@@ -235,7 +232,6 @@ class RagFragmentsModel(Model):
             context_mask = model_output.context_attention_mask.bool()
         else:
             context_mask = input_mask
-
 
         # print(f"generator_enc_last_hidden_state: {generator_enc_last_hidden_state.size()}")
         if generator_enc_last_hidden_state is not None:
@@ -269,8 +265,7 @@ class RagFragmentsModel(Model):
             results["generator_enc_embeddings"] = gen_enc_emb
             # logger.info(f"generator_enc_embeddings size: {results['generator_enc_embeddings'].size()}")
 
-            #if model_output.question_encoder_last_hidden_state
-
+            # if model_output.question_encoder_last_hidden_state
 
         decoder_hidden_states = model_output.generator_dec_hidden_states
         if decoder_hidden_states is not None:
@@ -378,7 +373,7 @@ class RagFragmentsModel(Model):
                         # print(f"Retrieved doc ids {model_outputs.retrieved_doc_ids}")
 
                         doc_dicts = []
-                        #print(f"BATCH_DOC_IDS: {batch_doc_ids}")
+                        # print(f"BATCH_DOC_IDS: {batch_doc_ids}")
                         for doc_id in doc_ids:
                             if int(doc_id) < int(1e9):
                                 doc_dict = self.retriever.index.get_doc_dicts(numpy.array([doc_id]))[0]
@@ -390,7 +385,7 @@ class RagFragmentsModel(Model):
                         doc_list = []
 
                         for doc_id, dl_score, dp_score, doc_dict in zip(doc_ids, dl_scores, dp_scores,
-                                                                           doc_dicts):
+                                                                        doc_dicts):
                             ret_doc_dict = {}
                             ret_doc_dict["id"] = doc_id
                             ret_doc_dict["title"] = doc_dict["title"]
@@ -436,7 +431,7 @@ class RagFragmentsModel(Model):
                  ) -> List[Dict[str, Any]]:
 
         input_dict = self.retriever_tokenizer.encode_plus(text, max_length=max_input_length)
-       
+
         input_ids = input_dict["input_ids"]
         attention_mask = input_dict["attention_mask"]
 

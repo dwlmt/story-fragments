@@ -4,9 +4,7 @@ from typing import Dict, Any, List
 import torch
 from allennlp.data import Vocabulary, TextFieldTensors
 from allennlp.models import Model
-from allennlp.training.metrics import CategoricalAccuracy
 from sentence_transformers import SentenceTransformer, models
-from sentence_transformers.util import pytorch_cos_sim
 from torch.nn import CrossEntropyLoss
 from torch.nn.utils.rnn import pad_sequence
 from transformers import AutoTokenizer
@@ -31,7 +29,7 @@ class SbertDiscFragmentsModel(Model):
         pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension())
 
         self.model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
-        #self.model = SentenceTransformer(model_name)
+        # self.model = SentenceTransformer(model_name)
 
         self.metrics = {}
 
@@ -45,10 +43,10 @@ class SbertDiscFragmentsModel(Model):
                 num_sequences_to_generate: int = 0,
                 ) -> Dict[str, torch.Tensor]:
 
-        #print(f"Metadata: {metadata}")
-        #print(f"Text: {text}")
-        #print(f"Labels: {labels}")
-        #print(f"Negative Labels: {negative_labels}")
+        # print(f"Metadata: {metadata}")
+        # print(f"Text: {text}")
+        # print(f"Labels: {labels}")
+        # print(f"Negative Labels: {negative_labels}")
 
         results = {}
 
@@ -77,7 +75,8 @@ class SbertDiscFragmentsModel(Model):
             examples_tensor = pad_sequence(examples, batch_first=True, padding_value=0.0)
 
             if negative_ids is not None:
-                input_tensor, label_tensor, neg_label_tensor = torch.split(examples_tensor, int(examples_tensor.size()[0] / 3), dim=0)
+                input_tensor, label_tensor, neg_label_tensor = torch.split(examples_tensor,
+                                                                           int(examples_tensor.size()[0] / 3), dim=0)
             else:
                 input_tensor, label_tensor = torch.split(examples_tensor, int(examples_tensor.size()[0] / 2), dim=0)
                 neg_label_tensor = None
@@ -110,12 +109,12 @@ class SbertDiscFragmentsModel(Model):
             labels_output = torch.cat(output[1:])
             # print(f"Representations: {reps_a}, {reps_b}, {reps_a.size()}, {reps_b.size()}")
 
-            scores =  torch.mm(context_output, labels_output.transpose(0, 1))
-                #pytorch_cos_sim(context_output, labels_output) * 20
+            scores = torch.mm(context_output, labels_output.transpose(0, 1))
+            # pytorch_cos_sim(context_output, labels_output) * 20
 
             scores[torch.isnan(scores)] = 0.0
 
-            #print(f"Dot Product: {scores}")
+            # print(f"Dot Product: {scores}")
             labels = torch.tensor(range(len(scores)), dtype=torch.long,
                                   device=scores.device)
             # print(f"Labels: {labels}")

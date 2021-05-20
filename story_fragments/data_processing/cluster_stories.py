@@ -1,34 +1,24 @@
 ''' Script for cluster analysis for story vectors.
 '''
 import collections
+import multiprocessing
 import textwrap
 from pathlib import Path
-from typing import List, OrderedDict
+from typing import List
 
 import fire
-import jsonlines
-import umap
-from joblib import dump
+import hdbscan
 import jsonlines as jsonlines
+import networkx as nx
 import numpy
 import pandas
 import plotly
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
+import umap
+from joblib import dump
 from sklearn.preprocessing import normalize
-import plotly.express as px
-import plotly
-import hdbscan
-from sklearn.metrics.pairwise import pairwise_distances
-import multiprocessing
 
-from faerun import Faerun
-from PIL import Image
-
-import networkx as nx
-
-
-from story_fragments.data_processing.plotly_utils import text_table, create_peak_text_and_metadata
+from story_fragments.data_processing.plotly_utils import text_table
 
 colors = ['rgb(31, 119, 180)', 'rgb(255, 127, 14)',
           'rgb(44, 160, 44)', 'rgb(214, 39, 40)',
@@ -68,24 +58,24 @@ class ClusterStories(object):
         umap_projections = umap_model.fit_transform(data)
         return umap_projections, umap_model
 
-    def hdbscan(self, data, metric: str ="cosine"):
+    def hdbscan(self, data, metric: str = "cosine"):
 
         if metric == "cosine":
             data = normalize(data, norm='l2')
             metric = "l2"
 
-        #distances_matrix = pairwise_distances(data, metric=metric, n_jobs=multiprocessing.cpu_count() - 1)
-        #print(f"Distances shape: {distances_matrix.shape}")
+        # distances_matrix = pairwise_distances(data, metric=metric, n_jobs=multiprocessing.cpu_count() - 1)
+        # print(f"Distances shape: {distances_matrix.shape}")
 
-        #print(f"Data Shape: {data.shape}")
+        # print(f"Data Shape: {data.shape}")
         clusterer = hdbscan.HDBSCAN(metric=metric,
                                     core_dist_n_jobs=multiprocessing.cpu_count() - 1)
 
         clusterer.fit(data)
 
-        #print(f"Cluster: {clusterer.labels_}, {clusterer.probabilities_}")
+        # print(f"Cluster: {clusterer.labels_}, {clusterer.probabilities_}")
 
-        return clusterer.labels_.tolist() , clusterer.probabilities_.tolist(), clusterer
+        return clusterer.labels_.tolist(), clusterer.probabilities_.tolist(), clusterer
 
     def tmap(self, data):
 
@@ -102,16 +92,16 @@ class ClusterStories(object):
         x, y, source_edges, target_edges, _ = tm.layout_from_lsh_forest(lf)
 
         return x, y, source_edges, target_edges
-        
 
     def cluster(self,
-             src_json: List[str],
-             output_dir: str,
-             embedding_fields: List[str] = ["retrieved_doc_embedding","generator_enc_embedding","generator_dec_embedding","question_embedding","answer_embedding"],
-             metrics: List[str] = ["l2","cosine"],
-             local_cluster: bool = False
-             ):
-        #print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
+                src_json: List[str],
+                output_dir: str,
+                embedding_fields: List[str] = ["retrieved_doc_embedding", "generator_enc_embedding",
+                                               "generator_dec_embedding", "question_embedding", "answer_embedding"],
+                metrics: List[str] = ["l2", "cosine"],
+                local_cluster: bool = False
+                ):
+        # print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -127,7 +117,7 @@ class ClusterStories(object):
             all_story_dfs_list = []
 
             for json_file in src_json:
-                #print(f"Process: {json_file}")
+                # print(f"Process: {json_file}")
 
                 with jsonlines.open(json_file) as reader:
 
@@ -136,7 +126,7 @@ class ClusterStories(object):
                         story_field_df_list = []
 
                         if "title" in obj:
-                            story_id = obj["title"].replace(".txt","")
+                            story_id = obj["title"].replace(".txt", "")
                         else:
                             story_id = f"{i}"
 
@@ -145,12 +135,13 @@ class ClusterStories(object):
                             for p in obj["passages"]:
 
                                 if field in p:
-                                    p_dict = {"story_id": i, "seq_num": p["seq_num"], "text": p["text"], "title": story_id}
+                                    p_dict = {"story_id": i, "seq_num": p["seq_num"], "text": p["text"],
+                                              "title": story_id}
 
                                     p_embedding = numpy.array(p[field])
                                     p_dict["embedding"] = p_embedding
 
-                                    #print(p_dict)
+                                    # print(p_dict)
 
                                     story_field_df_list.append(p_dict)
 
@@ -158,8 +149,8 @@ class ClusterStories(object):
 
                         all_story_dfs_list.append(story_df)
 
-                        #print(story_df)
-                                
+                        # print(story_df)
+
                         i += 1
 
             all_story_df = pandas.concat(all_story_dfs_list)
@@ -177,7 +168,6 @@ class ClusterStories(object):
 
                 all_story_df[f"cluster_label_{metric}"] = cluster_labels
                 all_story_df[f"cluster_prob_{metric}"] = cluster_probs
-
 
             '''
             x_nodes, y_nodes, source_edges, target_edges = self.tmap(data=stacked_field)
@@ -245,7 +235,6 @@ class ClusterStories(object):
                 for metric in metrics:
 
                     if local_cluster:
-
                         story_df = story_df.copy(deep=True)
 
                         cluster_labels, cluster_probs, clusterer = self.hdbscan(stacked_field, metric)
@@ -274,11 +263,11 @@ class ClusterStories(object):
         return x_edges, y_edges
 
     def network_memory(self,
-                src_json: List[str],
-                output_dir: str,
-                num_central_nodes_to_plot: int = 50,
-                centrality_depth_limit: int = 1
-                ):
+                       src_json: List[str],
+                       output_dir: str,
+                       num_central_nodes_to_plot: int = 50,
+                       centrality_depth_limit: int = 1
+                       ):
         # print(f"Params: {src_json}", {output_dir}, {plot_fields}, {plot_field_names})
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)
@@ -296,7 +285,7 @@ class ClusterStories(object):
                     for obj in reader:
 
                         if "title" in obj:
-                            story_id = obj["title"].replace(".txt","")
+                            story_id = obj["title"].replace(".txt", "")
                         else:
                             story_id = f"{i}"
 
@@ -306,25 +295,28 @@ class ClusterStories(object):
 
                             G = self.construct_graph(obj, story_id)
 
-
                             self.add_centrality(G, nx.degree_centrality(G), "degree_centrality")
                             try:
-                                self.add_centrality(G, nx.eigenvector_centrality(G, weight="weight"), "eigenvector_centrality")
+                                self.add_centrality(G, nx.eigenvector_centrality(G, weight="weight"),
+                                                    "eigenvector_centrality")
                             except:
                                 pass
                             self.add_centrality(G, nx.closeness_centrality(G), "closeness_centrality")
                             self.add_centrality(G, nx.information_centrality(G, weight="weight"),
-                                                                    "information_centrality")
-                            self.add_centrality(G, nx.betweenness_centrality(G, weight="weight"), "betweenness_centrality")
-                            sorted_centrality = self.add_centrality(G, nx.current_flow_betweenness_centrality(G, weight="weight"),
-                                                "betweenness_current_centrality")
+                                                "information_centrality")
+                            self.add_centrality(G, nx.betweenness_centrality(G, weight="weight"),
+                                                "betweenness_centrality")
+                            sorted_centrality = self.add_centrality(G, nx.current_flow_betweenness_centrality(G,
+                                                                                                              weight="weight"),
+                                                                    "betweenness_current_centrality")
 
-                            pos = nx.spring_layout(G)#nx.multipartite_layout(G, align="horizontal")
+                            pos = nx.spring_layout(G)  # nx.multipartite_layout(G, align="horizontal")
                             print(pos)
 
                             plot_name = "memory_network"
                             fig = self._plot_memory_network(G, pos)
-                            plotly.io.write_html(fig=fig, file=f"{output_dir}/{story_id}/memory_network/{plot_name}.html",
+                            plotly.io.write_html(fig=fig,
+                                                 file=f"{output_dir}/{story_id}/memory_network/{plot_name}.html",
                                                  include_plotlyjs='cdn',
                                                  include_mathjax='cdn', auto_open=False)
 
@@ -369,15 +361,13 @@ class ClusterStories(object):
 
                                 cent_counter += 1
 
-
-
                         i += 1
 
     def add_centrality(self, G, centrality, centrality_field_name):
         sorted_centrality = collections.OrderedDict(
             reversed(sorted(centrality.items(), key=lambda item: item[1])))
         for k, v in sorted_centrality.items():
-            print(centrality_field_name,k,v,)
+            print(centrality_field_name, k, v, )
             G.nodes[k][f"{centrality_field_name}"] = v
 
             print(f"{centrality_field_name}: ")
@@ -422,21 +412,21 @@ class ClusterStories(object):
             x1, y1 = pos[v]
 
             if data["weight"] < 1.0:
-                edge_weighting  = data["probability"] * 10
+                edge_weighting = data["probability"] * 10
             else:
                 edge_weighting = 1.0
 
-            edge_weighting = max(1, edge_weighting )
+            edge_weighting = max(1, edge_weighting)
 
             edge_trace = go.Scatter(
                 x=[x0, x1], y=[y0, y1],
-                line=dict(width=edge_weighting, color='#888'),#, color=edge_weighting),
+                line=dict(width=edge_weighting, color='#888'),  # , color=edge_weighting),
                 hoverinfo='text',
                 hovertext=edge_hover,
                 mode='lines')
 
             edge_traces.append(edge_trace)
-            
+
         node_trace = go.Scatter(
             x=node_x, y=node_y,
             mode='markers',
@@ -447,10 +437,10 @@ class ClusterStories(object):
         node_trace.marker.opacity = 1.0
         node_adjacencies = []
         for n, data in G.nodes(data=True):
-            #print(data)
+            # print(data)
             centrality = max(data["closeness_centrality"] * 20.0, 5.0)
 
-            #centrality = max(min(len(adjacencies[1]) * 1.0, 100.00),10.0)
+            # centrality = max(min(len(adjacencies[1]) * 1.0, 100.00),10.0)
 
             node_adjacencies.append(centrality)
 
@@ -473,7 +463,7 @@ class ClusterStories(object):
             G.add_node(-int(p["seq_num"]), text=p["text"], subset=0)
 
             if previous_node is not None:
-               G.add_edge(int(-previous_node["seq_num"]), -int(p["seq_num"]), weight=1.0, probability=1.0)
+                G.add_edge(int(-previous_node["seq_num"]), -int(p["seq_num"]), weight=1.0, probability=1.0)
 
             if "memory_id" in p:
                 G.add_node(int(p["memory_id"]), text=p["text"], subset=1)
@@ -496,12 +486,14 @@ class ClusterStories(object):
                         G.add_node(int(doc["id"]), text=text, title=title, subset=2)
 
                     G.add_edge(int(doc["id"]), -int(p["seq_num"]),
-                               weight=1.0 - doc["probability"], dot_score=doc["dot_score"], probability=doc["probability"])
+                               weight=1.0 - doc["probability"], dot_score=doc["dot_score"],
+                               probability=doc["probability"])
 
             previous_node = p
         return G
 
-    def create_mst_plot(self, x_edges, x_points, y_edges, y_points, id_values, text_values, cluster=None, cluster_prob=None, color_override=None):
+    def create_mst_plot(self, x_edges, x_points, y_edges, y_points, id_values, text_values, cluster=None,
+                        cluster_prob=None, color_override=None):
 
         if color_override is not None:
             color = color_override
@@ -510,28 +502,28 @@ class ClusterStories(object):
 
         if cluster is not None:
             text_list = [f"<b>{id}</b> <br><br>Cluster: {c} - {cp}, <br><br>{t}" for id, c, cp, t in
-             zip(id_values, cluster, cluster_prob, text_values)]
+                         zip(id_values, cluster, cluster_prob, text_values)]
         else:
             text_list = [f"<b>{id}</b> <br><br>{t}" for id, t in
                          zip(id_values, text_values)]
 
         edge_trace = go.Scatter(x=x_edges, y=y_edges,
-                            mode='lines',
-                            line=go.scatter.Line(color='#888', width=2),
-                            hoverinfo='none',
-                            showlegend=False)
+                                mode='lines',
+                                line=go.scatter.Line(color='#888', width=2),
+                                hoverinfo='none',
+                                showlegend=False)
         node_trace = go.Scatter(x=list(x_points), y=list(y_points),
-                                   mode='markers',
-                                   marker=go.scatter.Marker(size=18,
-                                                            line=dict(width=1),
-                                                            colorscale="Magma"
-                                                            ),
-                                   # hover_name=,
-                                   text=text_list,
-                                   hoverinfo='text',
-                                   # textposition='top center',
-                                   marker_color=color,
-                                   showlegend=False)
+                                mode='markers',
+                                marker=go.scatter.Marker(size=18,
+                                                         line=dict(width=1),
+                                                         colorscale="Magma"
+                                                         ),
+                                # hover_name=,
+                                text=text_list,
+                                hoverinfo='text',
+                                # textposition='top center',
+                                marker_color=color,
+                                showlegend=False)
         axis_style = dict(title='',
                           titlefont=dict(size=20),
                           showgrid=False,
@@ -545,7 +537,7 @@ class ClusterStories(object):
                       yaxis=axis_style,
                       hovermode='closest',
                       template="plotly_white")
-        
+
         fig = go.Figure(dict(data=[edge_trace, node_trace], layout=layout))
         return fig
 

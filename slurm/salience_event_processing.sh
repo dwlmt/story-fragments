@@ -4,10 +4,8 @@
 #SBATCH -N 1	  # nodes requested
 #SBATCH -n 1	  # tasks requested
 #SBATCH --gres=gpu:1
-#SBATCH --mem=28g  # Memory
-#SBATCH --cpus-per-task=8  # number of cpus to use - there are 32 on each node.
-
-# Set EXP_BASE_NAME and BATCH_FILE_PATH
+#SBATCH --mem=24g  # Memory
+#SBATCH --cpus-per-task=12  # number of cpus to use - there are 32 on each node.
 
 echo "============"
 echo "Initialize Env ========"
@@ -28,6 +26,7 @@ export STUDENT_ID=${USER}
 
 # General training parameters
 export CLUSTER_HOME="/home/${STUDENT_ID}"
+export DATASET_SOURCE="${CLUSTER_HOME}/datasets/story_datasets/"
 
 declare -a ScratchPathArray=(/disk/scratch_big/ /disk/scratch1/ /disk/scratch2/ /disk/scratch/ /disk/scratch_fast/)
 
@@ -46,49 +45,24 @@ done
 echo ${SCRATCH_HOME}
 
 export EXP_ROOT="${CLUSTER_HOME}/git/story-fragments"
-
-export ALLENNLP_CACHE_ROOT="${SCRATCH_HOME}/allennlp_cache/"
-export HF_DATASETS_CACHE="${SCRATCH_HOME}/huggingface_cache/"
-export TMPDIR=${HOME}/tmp/
-export TMP="${TMPDIR}"
-export TEMP="${TMPDIR}"
-
 export EXP_ID="${EXP_NAME}_${SLURM_JOB_ID}_${CURRENT_TIME}"
-export SERIAL_DIR="${SCRATCH_HOME}/${EXP_ID}"
+export SERIAL_DIR="${SCRATCH_HOME}/${EXP_ID}/"
 
-export PREDICTION_STORY_FILE="${CLUSTER_HOME}/${BATCH_FILE_PATH}"
-
-export MODEL_ZIP=${CLUSTER_HOME}/${MODEL_PATH}
 
 # Ensure the scratch home exists and CD to the experiment root level.
 cd "${EXP_ROOT}" # helps AllenNLP behave
 
-mkdir -p ${SERIAL_DIR}
+cd /home/s1569885/git/story-fragments/story_fragments/data_processing 
+
+python aligned_salience_processing.py events \
+--src-json ${BATCH_FILE_PATH} \
+--output-dir ${SERIAL_DIR} --match-type whole \
+--more-k-diff-similarity 0.05 --plus-minus-percentile 10.0 \
+--min-threshold 0.30 --earliest-k 3 --nearest-k 3 \
+--sentence-transformer-name "stsb-roberta-large"
 
 echo "============"
-echo "ALLENNLP Task========"
-
-echo "${OVERRIDES_JSON}"
-if [ -z "${OVERRIDES_JSON}" ];
-then
-
-  allennlp predict --include-package story_fragments --predictor ${PREDICTOR} \
-  ${MODEL_ZIP} \
-  ${PREDICTION_STORY_FILE} --cuda-device 0 \
-  --batch-size 1 \
-  --output-file ${SERIAL_DIR}/${EXP_ID}_prediction_output.jsonl;
-
-else
-  allennlp predict --include-package story_fragments --predictor ${PREDICTOR} \
-  ${MODEL_ZIP} \
-  ${PREDICTION_STORY_FILE} --cuda-device 0 \
-  --overrides "${OVERRIDES_JSON}" \
-  --batch-size 1 \
-  --output-file ${SERIAL_DIR}/${EXP_ID}_prediction_output.jsonl; fi
-
-
-echo "============"
-echo "ALLENNLP Task finished"
+echo "Salience Extraction Task finished"
 
 export HEAD_EXP_DIR="${CLUSTER_HOME}/runs/${EXP_ID}"
 mkdir -p "${HEAD_EXP_DIR}"
@@ -98,3 +72,5 @@ rm -rf "${SERIAL_DIR}"
 
 echo "============"
 echo "results synced"
+
+

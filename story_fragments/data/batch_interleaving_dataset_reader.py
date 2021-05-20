@@ -5,8 +5,6 @@ from allennlp.common.checks import ConfigurationError
 from allennlp.data.dataset_readers.dataset_reader import DatasetReader
 from allennlp.data.fields import MetadataField
 from allennlp.data.instance import Instance
-from allennlp.data.token_indexers import PretrainedTransformerIndexer
-from overrides import overrides
 
 
 @DatasetReader.register("interleaving-batch")
