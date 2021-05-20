@@ -486,7 +486,7 @@ class PlotStories(object):
 
                                     single_fig.update_layout(showlegend=False)
 
-                                    # plotly.io.write_image(fig=single_fig, file=f"{output_dir}/{title}/{subfield}.svg")
+                                    plotly.io.write_image(fig=single_fig, file=f"{output_dir}/{title}/{subfield}.svg")
                         except:
                             pass
 
