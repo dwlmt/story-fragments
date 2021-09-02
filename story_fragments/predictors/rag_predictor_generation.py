@@ -42,7 +42,6 @@ class RagFragmentsGenerationPredictor(Predictor):
         self._max_length = int(os.getenv("MAX_LENGTH", default=128))
         self._repetition_penalty = float(os.getenv("REPETITION_PENALTY", default=1.0))
         self._num_return_sequences = int(os.getenv("NUM_RETURN_SEQUENCES", default=5))
-        self._num_keep_sequences = int(os.getenv("NUM_KEEP_SEQUENCES", default=1))
         self._no_repeat_ngram_size = int(os.getenv("NO_REPEAT_NGRAM_SIZE", default=4))
         self._num_beams = int(os.getenv("NUM_BEAMS", default=1))
         self._num_beam_groups = int(os.getenv("NUM_BEAM_GROUPS", default=1))
@@ -91,7 +90,6 @@ class RagFragmentsGenerationPredictor(Predictor):
                                                      min_length=self._min_length,
                                                      repetition_penalty=self._repetition_penalty,
                                                      num_return_sequences=self._num_return_sequences,
-                                                     num_keep_sequences=self._num_keep_sequences,
                                                      no_repeat_ngram_size=self._no_repeat_ngram_size,
                                                      num_beams=self._num_beams,
                                                      num_beam_groups=self._num_beam_groups,
