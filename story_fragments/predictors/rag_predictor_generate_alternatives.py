@@ -31,10 +31,11 @@ class RagFragmentsGenerationAlternativesPredictor(Predictor):
         self._max_passages = int(os.getenv("MAX_PASSAGES", default=1000000))
 
         self._add_to_memory = parse_bool(os.getenv("ADD_TO_MEMORY", default="True"))
-        self._min_length = int(os.getenv("MIN_LENGTH", default=64))
+        self._min_length = int(os.getenv("MIN_LENGTH", default=92))
         self._max_length = int(os.getenv("MAX_LENGTH", default=128))
         self._repetition_penalty = float(os.getenv("REPETITION_PENALTY", default=1.0))
         self._num_return_sequences = int(os.getenv("NUM_RETURN_SEQUENCES", default=5))
+        self._num_filtered_sequences = int(os.getenv("NUM_FILTERED_SEQUENCES", default=5))
         self._no_repeat_ngram_size = int(os.getenv("NO_REPEAT_NGRAM_SIZE", default=4))
         self._num_beams = int(os.getenv("NUM_BEAMS", default=1))
         self._num_beam_groups = int(os.getenv("NUM_BEAM_GROUPS", default=1))
