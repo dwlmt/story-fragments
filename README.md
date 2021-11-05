@@ -19,5 +19,5 @@ Measuring event salience is essential in the understanding of stories. This pape
     address = "Online and Punta Cana, Dominican Republic",
     publisher = "Association for Computational Linguistics",
     url = "https://aclanthology.org/2021.emnlp-main.65",
-    pages = "851--865"
+    pages = "851--865"}
 ```
