@@ -1,6 +1,6 @@
 # Memory and Knowledge Augmented Language Models for Inferring Salience in Long-Form Stories
 
-This is the code repsoitory for the following [[paper]](https://aclanthology.org/2021.emnlp-main.65/):
+This is the code repository for the following [[paper]](https://aclanthology.org/2021.emnlp-main.65/):
 
 ## Abstract
 
