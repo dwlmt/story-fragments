@@ -21,3 +21,11 @@ Measuring event salience is essential in the understanding of stories. This pape
     url = "https://aclanthology.org/2021.emnlp-main.65",
     pages = "851--865"}
 ```
+
+## Models
+
+Model files and other [[resources]](https://drive.google.com/drive/folders/1RYPgdKLLIXLgVM_VlWimA332_yP5P1cZ?usp=sharing):
+
+- **Models**: Allennlp model files from the paper and with unlikelihood training.
+- **Shmoop**: Shmoop aligned summaries using Roberta Large. Note, permission is required from Shmoop to publish with this dataset.
+- **WikiPlots KB**: The Wikiplots KB. Contains the source files in json format and processed with an exact faiss index.
