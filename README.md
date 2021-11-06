@@ -28,4 +28,4 @@ Model files and other [[resources]](https://drive.google.com/drive/folders/1RYPg
 
 - **Models**: Allennlp model files from the paper and with unlikelihood training.
 - **Shmoop**: Shmoop aligned summaries using Roberta Large. Note, permission is required from Shmoop to publish with this dataset.
-- **WikiPlots KB**: The Wikiplots KB. Contains the source files in json format and processed with an exact faiss index.
+- **WikiPlots KB**: The Wikiplots KB. Contains the source files in json format and processed with an exact faiss index. Note, the Wikipedia KB is the original DPR and RAG one.
