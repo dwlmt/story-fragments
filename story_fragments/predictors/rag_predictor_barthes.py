@@ -47,8 +47,8 @@ class RagFragmentsBarthesPredictor(Predictor):
         super().__init__(model, dataset_reader)
 
         self._abridge = parse_bool(os.getenv("ABRIDGE", default="False"))
-        self._abridge_cycles = int(os.getenv("ABRIDGE_CYCLES", default=5))
-        self._abridge_percent = int(os.getenv("ABRIDGE_PERCENT", default=25))
+        self._abridge_cycles = int(os.getenv("ABRIDGE_CYCLES", default=4))
+        self._abridge_percent = int(os.getenv("ABRIDGE_PERCENT", default=50))
         self._abridge_metric = str(os.getenv("ABRIDGE_METRIC", default="avg_log_likelihood_salience"))
         self._abridge_flip = parse_bool(os.getenv("ABRIDGE_FLIP", default="False"))
 
