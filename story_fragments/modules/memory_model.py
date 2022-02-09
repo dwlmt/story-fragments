@@ -121,7 +121,7 @@ class RagMemoryModel(RagModel):
             output_hidden_states=None,
             output_retrieved=None,
             n_docs=None,
-            input_text_metadata=None,
+            input_text_metadata=None
     ):
         r"""
         """
@@ -187,7 +187,7 @@ class RagMemoryModel(RagModel):
                 ).squeeze(1)
 
                 #if self.use_memory_retrieval:
-                if not 'DONT_ADD_TO_MEMORY' in os.environ or os.environ.get("DONT_ADD_TO_MEMORY") != "True":
+                if not ('DONT_ADD_TO_MEMORY' in os.environ or os.environ.get("DONT_ADD_TO_MEMORY") != "True") and add_to_memory:
                     self.add_to_memory(input_ids, attention_mask, input_text_metadata)
 
             else:
@@ -371,7 +371,6 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
 
             rag_logprobs = self.marginalize(logits, doc_scores, actual_n_docs)
 
-            # #print(f"nll input: {outputs.logits.size()}, {outputs.doc_scores.size()}, {labels.size()} ")
             loss, perplexity, avg_ll = self.get_nll(
                 rag_logprobs,
                 doc_scores,
@@ -465,7 +464,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         with torch.no_grad():
             #target = torch.squeeze(target, dim=0)
             label_mask = (target != self.config.pad_token_id)
-            #print(f"Label mask: {label_mask}")
+
             n_tokens = torch.sum(
                 label_mask.view(label_mask.size()[0] * label_mask.size()[1]))
 
@@ -487,12 +486,11 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
 
         pred_tokens = torch.max(rag_logprobs, dim=-1)[1]
 
-        ##print(f"Unlikelihood training: {rag_logprobs.size()}, {pred_tokens.size()}, {context_input_ids.size()}")
 
         crep_mask = torch.zeros_like(pred_tokens).type_as(rag_logprobs)
         lrep_mask = torch.zeros_like(pred_tokens).type_as(rag_logprobs)
 
-        # print(f"Unlikelihood: {pred_tokens.size()}, {rag_logprobs.size()}, {context_input_ids}")
+
         for i, (tokens, logprob, context, lab) in enumerate(zip(pred_tokens, rag_logprobs, context_input_ids, labels)):
 
             if context is not None:
@@ -549,7 +547,7 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
         if n_docs == 0:
             n_docs = 1
 
-        print(seq_logits.size(), doc_scores.size(), n_docs)
+
         seq_logprobs = torch.nn.functional.log_softmax(seq_logits, dim=-1).view(
             seq_logits.shape[0] // n_docs, n_docs, -1, seq_logits.size(-1)
         )
@@ -748,11 +746,11 @@ class RagMemoryTokenForGeneration(RagTokenForGeneration):
                         ))
                     )
 
-                print(f"Generated list: {generated_list}")
+                #print(f"Generated list: {generated_list}")
                 generated_tensor = pad_sequence(generated_list, batch_first=True,
                                                 padding_value=self.config.generator.pad_token_id)
 
-                print(f"Generated tensor: {generated_tensor}")
+                #print(f"Generated tensor: {generated_tensor}")
                 return generated_tensor
 
         elif is_beam_gen_mode:

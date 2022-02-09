@@ -417,6 +417,7 @@ class RagFragmentsModel(Model):
                  min_length: int = 10,
                  repetition_penalty: float = 0.0,
                  num_return_sequences: int = 10,
+                 num_filtered_sequences: int = 10,
                  no_repeat_ngram_size: int = 4,
                  num_beams: int = 10,
                  num_beam_groups: int = 10,
@@ -466,9 +467,30 @@ class RagFragmentsModel(Model):
         generated_strings = self.tokenizer.batch_decode(generated, skip_special_tokens=True)
 
         generated_list = []
+        losses = []
         for i, (gen_ids, gen_string) in enumerate(zip(generated, generated_strings)):
             generated = {"id": i, "text": gen_string}
             generated_list.append(generated)
+
+            if num_filtered_sequences < num_return_sequences:
+                print(f"CONTEXT: {input_ids}, GENERATED: {gen_ids}")
+                out = self.model.rag.generator(input_ids=input_ids,labels=torch.unsqueeze(gen_ids, dim=0))
+
+                losses.append(out.loss.cpu().detach())
+
+        if num_filtered_sequences < num_return_sequences:
+            filtered_generated_list = []
+            losses_arr = numpy.array(losses)
+            losses_idx = numpy.argpartition(losses_arr, num_filtered_sequences)
+            losses_idx = losses_idx[:num_filtered_sequences]
+            if isinstance(losses_idx, int):
+                losses_idx = []
+
+            for p in losses_idx:
+                filtered_generated_list.append(generated_list[p])
+
+            generated_list = filtered_generated_list
+
 
         return generated_list
 
