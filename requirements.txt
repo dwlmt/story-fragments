@@ -14,7 +14,7 @@ deepspeed==0.3.4+6021b70
 spacy==3.0.5
 jsonlines==2.0.0
 pandas==1.2.3
-joblib==1.0.1
+joblib==1.2.0
 torch==1.7.1
 faiss==1.7.0
 pytest==6.2.2
