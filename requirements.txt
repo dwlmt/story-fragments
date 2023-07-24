@@ -1,4 +1,4 @@
-nltk==3.5
+nltk==3.6.6
 allennlp==1.5.0
 faerun==0.3.20
 scipy==1.6.1
